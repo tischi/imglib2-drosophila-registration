@@ -5,11 +5,11 @@
 	<parent>
 		<groupId>org.scijava</groupId>
 		<artifactId>pom-scijava</artifactId>
-		<version>22.2.0</version>
+		<version>23.1.1</version>
 	</parent>
 
 	<artifactId>imglib2-drosophila-registration</artifactId>
-	<version>1.0.0-SNAPSHOT</version>
+	<version>0.2.1</version>
 
 	<name>ImgLib2 Drosophila Registration</name>
 	<description>TODO</description>
@@ -116,6 +116,11 @@
 			<artifactId>bio-formats_plugins</artifactId>
 		</dependency>
 
+		<dependency>
+			<groupId>sc.fiji</groupId>
+			<artifactId>bigdataviewer-vistools</artifactId>
+		</dependency>
+
 
 		<!-- Jama (Java Matrix package) is used for computing inertia computeRegistration -->
 		<dependency>
@@ -123,12 +128,6 @@
 			<artifactId>jama</artifactId>
 		</dependency>
 
-		<!-- phase correlation -->
-		<dependency>
-			<groupId>net.preibisch</groupId>
-			<artifactId>BigStitcher</artifactId>
-			<version>0.1.1</version>
-		</dependency>
 
 	</dependencies>
 

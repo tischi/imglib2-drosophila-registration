@@ -1,21 +1,21 @@
-package de.embl.cba.drosophila.dapi;
+package de.embl.cba.drosophila.shavenbaby;
 
 import bdv.util.*;
 import de.embl.cba.drosophila.Projection;
 import de.embl.cba.drosophila.Transforms;
 import de.embl.cba.drosophila.Utils;
-import de.embl.cba.drosophila.shavenbaby.ShavenBabyRegistration;
-import de.embl.cba.drosophila.shavenbaby.ShavenBabyRegistrationSettings;
 import ij.ImagePlus;
 import ij.io.FileSaver;
 import net.imagej.DatasetService;
 import net.imagej.ops.OpService;
+import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealPoint;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
+import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 import org.scijava.app.StatusService;
 import org.scijava.command.Command;
@@ -25,14 +25,16 @@ import org.scijava.plugin.Plugin;
 import org.scijava.ui.UIService;
 import org.scijava.widget.FileWidget;
 
-import javax.rmi.CORBA.Util;
 import java.io.File;
 import java.util.ArrayList;
 
+import static de.embl.cba.drosophila.Constants.*;
+import static de.embl.cba.drosophila.Constants.X;
+import static de.embl.cba.drosophila.Constants.Y;
 import static de.embl.cba.drosophila.ImageIO.openWithBioFormats;
 
 
-@Plugin(type = Command.class, menuPath = "Plugins>Registration>EMBL>Drosophila Svb" )
+@Plugin(type = Command.class, menuPath = "Plugins>Registration>EMBL>Drosophila Shavenbaby" )
 public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T > > implements Command
 {
 	@Parameter
@@ -80,7 +82,10 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 	public double backgroundIntensity = settings.backgroundIntensity;
 
 	@Parameter
-	public double thresholdAfterBackgroundSubtraction = settings.thresholdAfterBackgroundSubtraction;
+	public String thresholdModality = settings.thresholdModality;
+
+	@Parameter
+	public double threshold = settings.threshold;
 
 	@Parameter
 	public double refractiveIndexScalingCorrectionFactor = settings.refractiveIndexScalingCorrectionFactor;
@@ -128,10 +133,18 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 					}
 
 					RandomAccessibleInterval< T > transformed = createTransformedImage( imagePlus, registration );
-//					showWithBdv( transformed );
 
-					final RandomAccessibleInterval< T > transformedWithImagePlusDimensionOrder = Utils.copyAsArrayImg( Views.permute( transformed, 2, 3 ) );
+					if ( settings.showIntermediateResults ) showWithBdv( transformed );
 
+					final FinalInterval interval = createOutputImageInterval();
+
+					final IntervalView< T > transformedCropped = Views.interval( transformed, interval );
+
+					if ( settings.showIntermediateResults ) showWithBdv( transformedCropped );
+
+					final RandomAccessibleInterval< T > transformedWithImagePlusDimensionOrder = Utils.copyAsArrayImg( Views.permute( transformedCropped, 2, 3 ) );
+
+					
 					Utils.log( "Creating projections..." );
 					final ArrayList< ImagePlus > projections = createProjections( transformedWithImagePlusDimensionOrder );
 
@@ -153,6 +166,20 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 		Utils.log( "Done!" );
 
 
+	}
+
+	public FinalInterval createOutputImageInterval()
+	{
+		long[] min = new long[3];
+		min[ X ] = - (long) ( settings.outputImageSizeX / 2 );
+		min[ Y ] = - (long) ( settings.outputImageSizeY / 2 );
+		min[ Z ] = - (long) ( settings.outputImageSizeZ / 2 );
+		long[] max = new long[3];
+		for ( int d = 0; d < 3; ++d )
+		{
+			max[ d ] = -1 * min[ d ];
+		}
+		return new FinalInterval( min, max );
 	}
 
 	public void saveImages( String inputPath, ArrayList< ImagePlus > imps )
@@ -201,18 +228,18 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 	public RandomAccessibleInterval< T > createTransformedImage( ImagePlus imagePlus, ShavenBabyRegistration registration )
 	{
 		RandomAccessibleInterval< T > allChannels = ImageJFunctions.wrap( imagePlus );
-		RandomAccessibleInterval< T > svb = getShaveBabyImage( imagePlus.getNChannels(), allChannels );
+		RandomAccessibleInterval< T > svb = getShavenBabyImage( imagePlus.getNChannels(), allChannels );
 
-		Utils.log( "Computing registration..." );
+		Utils.log( "Computing registration...." );
 		final AffineTransform3D registrationTransform = registration.computeRegistration( svb, Utils.getCalibration( imagePlus ) );
 
-		Utils.log( "Transforming all channels to a final resolution of " + settings.outputResolution + "micrometer ..." );
+		Utils.log( "Transforming all channels to a final resolution of " + settings.outputResolution + " micrometer ..." );
 		final RandomAccessibleInterval< T > allChannelsTransformed = Transforms.transformAllChannels( allChannels, registrationTransform, imagePlus.getNChannels() );
 
 		return allChannelsTransformed;
 	}
 
-	public RandomAccessibleInterval< T > getShaveBabyImage( int numChannels, RandomAccessibleInterval< T > allChannels )
+	public RandomAccessibleInterval< T > getShavenBabyImage( int numChannels, RandomAccessibleInterval< T > allChannels )
 	{
 		RandomAccessibleInterval< T > svb;
 
@@ -234,9 +261,10 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 		settings.closingRadius = closingRadius;
 		settings.outputResolution = outputResolution;
 		settings.backgroundIntensity = backgroundIntensity;
-		settings.thresholdAfterBackgroundSubtraction = thresholdAfterBackgroundSubtraction;
 		settings.refractiveIndexScalingCorrectionFactor = refractiveIndexScalingCorrectionFactor;
 		settings.refractiveIndexIntensityCorrectionDecayLength = refractiveIndexIntensityCorrectionDecayLength;
+		settings.thresholdModality = thresholdModality;
+		settings.threshold = threshold;
 	}
 
 

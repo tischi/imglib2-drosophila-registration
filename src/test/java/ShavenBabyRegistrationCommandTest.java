@@ -1,7 +1,4 @@
-import de.embl.cba.drosophila.dapi.DapiRegistrationCommand;
-import de.embl.cba.drosophila.dapi.ShavenBabyRegistrationCommand;
-import ij.IJ;
-import ij.ImagePlus;
+import de.embl.cba.drosophila.shavenbaby.ShavenBabyRegistrationCommand;
 import net.imagej.ImageJ;
 
 public class ShavenBabyRegistrationCommandTest

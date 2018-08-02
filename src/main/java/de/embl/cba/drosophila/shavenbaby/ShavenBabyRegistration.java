@@ -184,7 +184,6 @@ public class ShavenBabyRegistration
 
 		Utils.log( "Computing long axis orientation..." );
 
-
 		final AffineTransform3D orientationTransform = computeOrientationTransform( yawAlignedMask, yawAlignedIntensities, settings.registrationResolution );
 
 		registration = registration.preConcatenate( orientationTransform );
@@ -248,13 +247,9 @@ public class ShavenBabyRegistration
 
 	public < T extends RealType< T > & NativeType< T > > RandomAccessibleInterval< BitType > createMask( RandomAccessibleInterval< T > downscaled, double[] registrationCalibration )
 	{
-		Utils.log( "Threshold...");
+		Utils.log( "Creating mask...");
 
-		final Histogram1d< T > histogram = opService.image().histogram( Views.iterable( downscaled ) );
-
-//		double huang = opService.threshold().huang( histogram ).getRealDouble();
-		double yen = opService.threshold().yen( histogram ).getRealDouble();
-		double threshold = yen;
+		double threshold = getThreshold( downscaled );
 
 		RandomAccessibleInterval< BitType > mask = Converters.convert( downscaled, ( i, o ) -> o.set( i.getRealDouble() > threshold ? true : false ), new BitType() );
 
@@ -263,6 +258,26 @@ public class ShavenBabyRegistration
 		if ( settings.showIntermediateResults ) show( mask, "mask", null, registrationCalibration, false );
 
 		return mask;
+	}
+
+	public < T extends RealType< T > & NativeType< T > > double getThreshold( RandomAccessibleInterval< T > downscaled )
+	{
+
+		double threshold = 0;
+
+		if ( settings.thresholdModality.equals( ShavenBabyRegistrationSettings.AUTO_THRESHOLD  ) )
+		{
+			final Histogram1d< T > histogram = opService.image().histogram( Views.iterable( downscaled ) );
+
+			double huang = opService.threshold().huang( histogram ).getRealDouble();
+			double yen = opService.threshold().yen( histogram ).getRealDouble();
+			threshold = yen;
+		}
+		else
+		{
+			threshold= settings.threshold;
+		}
+		return threshold;
 	}
 
 	public ImgLabeling< Integer, IntType > createWatershedSeeds( double[] registrationCalibration, RandomAccessibleInterval< DoubleType > distance, RandomAccessibleInterval< BitType > mask )
@@ -443,7 +458,7 @@ public class ShavenBabyRegistration
 	 Phil
 
 	 final RandomAccessibleInterval< UnsignedByteType > binary = Converters.convert(
-	 downscaled, ( i, o ) -> o.set( i.getRealDouble() > settings.thresholdAfterBackgroundSubtraction ? 255 : 0 ), new UnsignedByteType() );
+	 downscaled, ( i, o ) -> o.set( i.getRealDouble() > settings.threshold ? 255 : 0 ), new UnsignedByteType() );
 
 	 if ( settings.showIntermediateResults ) show( binary, "binary", null, calibration, false );
 
