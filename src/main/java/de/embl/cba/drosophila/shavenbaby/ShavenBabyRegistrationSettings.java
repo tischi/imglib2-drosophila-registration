@@ -3,7 +3,7 @@ package de.embl.cba.drosophila.shavenbaby;
 public class ShavenBabyRegistrationSettings
 {
 	public static final String MANUAL_THRESHOLD = "Manual threshold";
-	public static final String AUTO_THRESHOLD = "Auto threshold";
+	public static final String HUANG_AUTO_THRESHOLD = "Huang auto threshold";
 
 	// all spatial values are in micrometer
 	// drosophila length: 420
@@ -31,9 +31,9 @@ public class ShavenBabyRegistrationSettings
 	public double threshold = 500;
 	public double closingRadius = 0;
 
-	public double outputImageSizeX = 200;
-	public double outputImageSizeY = 200;
-	public double outputImageSizeZ = 500;
+	public double outputImageSizeX = 500;
+	public double outputImageSizeY = 250;
+	public double outputImageSizeZ = 250;
 
 
 }

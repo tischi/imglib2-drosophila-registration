@@ -7,7 +7,6 @@ import de.embl.cba.drosophila.geometry.EllipsoidParameters;
 import de.embl.cba.drosophila.geometry.Ellipsoids;
 import net.imagej.ops.OpService;
 import net.imglib2.Cursor;
-import net.imglib2.IterableInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealPoint;
 import net.imglib2.algorithm.morphology.distance.DistanceTransform;
@@ -265,13 +264,14 @@ public class ShavenBabyRegistration
 
 		double threshold = 0;
 
-		if ( settings.thresholdModality.equals( ShavenBabyRegistrationSettings.AUTO_THRESHOLD  ) )
+		if ( settings.thresholdModality.equals( ShavenBabyRegistrationSettings.HUANG_AUTO_THRESHOLD ) )
 		{
 			final Histogram1d< T > histogram = opService.image().histogram( Views.iterable( downscaled ) );
 
 			double huang = opService.threshold().huang( histogram ).getRealDouble();
 			double yen = opService.threshold().yen( histogram ).getRealDouble();
-			threshold = yen;
+
+			threshold = huang;
 		}
 		else
 		{

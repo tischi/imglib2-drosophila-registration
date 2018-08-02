@@ -15,6 +15,7 @@ import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
+import net.imglib2.util.Intervals;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 import org.scijava.app.StatusService;
@@ -81,7 +82,7 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 	@Parameter
 	public double backgroundIntensity = settings.backgroundIntensity;
 
-	@Parameter
+	@Parameter( choices = { ShavenBabyRegistrationSettings.HUANG_AUTO_THRESHOLD, ShavenBabyRegistrationSettings.MANUAL_THRESHOLD } )
 	public String thresholdModality = settings.thresholdModality;
 
 	@Parameter
@@ -106,7 +107,7 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 		if ( inputModality.equals( CURRENT_IMAGE ) && imagePlus != null )
 		{
 			RandomAccessibleInterval< T > transformed = createTransformedImage( imagePlus, registration );
-			showWithBdv( transformed );
+			showWithBdv( transformed, "registered" );
 			ImageJFunctions.show( Views.permute( transformed, 2, 3 ) );
 		}
 
@@ -134,17 +135,17 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 
 					RandomAccessibleInterval< T > transformed = createTransformedImage( imagePlus, registration );
 
-					if ( settings.showIntermediateResults ) showWithBdv( transformed );
+					if ( settings.showIntermediateResults ) showWithBdv( transformed, "registered" );
 
-					final FinalInterval interval = createOutputImageInterval();
+					final FinalInterval interval = createOutputImageInterval( transformed );
 
 					final IntervalView< T > transformedCropped = Views.interval( transformed, interval );
 
-					if ( settings.showIntermediateResults ) showWithBdv( transformedCropped );
+					if ( settings.showIntermediateResults ) showWithBdv( transformedCropped, "registered cropped" );
 
 					final RandomAccessibleInterval< T > transformedWithImagePlusDimensionOrder = Utils.copyAsArrayImg( Views.permute( transformedCropped, 2, 3 ) );
 
-					
+
 					Utils.log( "Creating projections..." );
 					final ArrayList< ImagePlus > projections = createProjections( transformedWithImagePlusDimensionOrder );
 
@@ -168,17 +169,20 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 
 	}
 
-	public FinalInterval createOutputImageInterval()
+	public FinalInterval createOutputImageInterval( RandomAccessibleInterval rai )
 	{
-		long[] min = new long[3];
-		min[ X ] = - (long) ( settings.outputImageSizeX / 2 );
-		min[ Y ] = - (long) ( settings.outputImageSizeY / 2 );
-		min[ Z ] = - (long) ( settings.outputImageSizeZ / 2 );
-		long[] max = new long[3];
+		final long[] min = Intervals.minAsLongArray( rai );
+		final long[] max = Intervals.maxAsLongArray( rai );
+
+		min[ X ] = - (long) ( settings.outputImageSizeX / 2 / settings.outputResolution );
+		min[ Y ] = - (long) ( settings.outputImageSizeY / 2 / settings.outputResolution );
+		min[ Z ] = - (long) ( settings.outputImageSizeZ / 2 / settings.outputResolution );
+
 		for ( int d = 0; d < 3; ++d )
 		{
 			max[ d ] = -1 * min[ d ];
 		}
+
 		return new FinalInterval( min, max );
 	}
 
@@ -217,9 +221,9 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 		return projections;
 	}
 
-	public void showWithBdv( RandomAccessibleInterval< T > transformed )
+	public void showWithBdv( RandomAccessibleInterval< T > transformed, String title )
 	{
-		Bdv bdv = BdvFunctions.show( transformed, "registered", BdvOptions.options().axisOrder( AxisOrder.XYZC ) );
+		Bdv bdv = BdvFunctions.show( transformed, title, BdvOptions.options().axisOrder( AxisOrder.XYZC ) );
 		final ArrayList< RealPoint > points = new ArrayList<>();
 		points.add( new RealPoint( new double[]{0,0,0} ));
 		BdvFunctions.showPoints( points, "origin", BdvOptions.options().addTo( bdv ) );

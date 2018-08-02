@@ -14,7 +14,6 @@ public class ImageIO
 
 	public static ImagePlus openWithBioFormats( String path )
 	{
-
 		try
 		{
 			ImporterOptions opts = new ImporterOptions();

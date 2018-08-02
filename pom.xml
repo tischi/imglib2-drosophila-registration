@@ -9,7 +9,7 @@
 	</parent>
 
 	<artifactId>imglib2-drosophila-registration</artifactId>
-	<version>0.2.1</version>
+	<version>0.3.0</version>
 
 	<name>ImgLib2 Drosophila Registration</name>
 	<description>TODO</description>
@@ -73,6 +73,7 @@
 		<license.copyrightOwners>EMBL</license.copyrightOwners>
 		<imagej.app.directory>/Applications/Fiji.app/</imagej.app.directory>
 		<enforcer.skip>true</enforcer.skip>
+		<native-lib-loader.version>2.2.0</native-lib-loader.version>
 	</properties>
 
 
