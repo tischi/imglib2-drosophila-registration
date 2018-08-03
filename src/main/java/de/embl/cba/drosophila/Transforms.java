@@ -205,23 +205,16 @@ public abstract class Transforms< T extends InvertibleRealTransform & Concatenab
 	}
 
 	public static <T extends RealType<T> & NativeType< T > >
-	RandomAccessibleInterval< T > transformAllChannels( RandomAccessibleInterval< T > images, AffineTransform3D registrationTransform, int channelDimension )
+	RandomAccessibleInterval< T > transformAllChannels( RandomAccessibleInterval< T > images, AffineTransform3D registrationTransform )
 	{
 		ArrayList< RandomAccessibleInterval< T > > transformedChannels = new ArrayList<>(  );
 
-		if ( channelDimension > 0 )
-		{
-			long numChannels = images.dimension( channelDimension );
+		long numChannels = images.dimension( 3 );
 
-			for ( int c = 0; c < numChannels; ++c )
-			{
-				final RandomAccessibleInterval< T > channel = Views.hyperSlice( images, Utils.imagePlusChannelDimension, c );
-				transformedChannels.add( createTransformedView( channel, registrationTransform ) );
-			}
-		}
-		else
+		for ( int c = 0; c < numChannels; ++c )
 		{
-			transformedChannels.add( createTransformedView( images, registrationTransform ) );
+			final RandomAccessibleInterval< T > channel = Views.hyperSlice( images, 3, c );
+			transformedChannels.add( createTransformedView( channel, registrationTransform ) );
 		}
 
 		return Views.stack( transformedChannels );

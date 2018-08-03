@@ -143,17 +143,16 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 
 					if ( settings.showIntermediateResults ) showWithBdv( registeredAndCropped, "registered" );
 
-					final RandomAccessibleInterval< T > transformedWithImagePlusDimensionOrder = Utils.copyAsArrayImg( Views.permute( registeredAndCropped, 2, 3 ) );
-
 					Utils.log( "Creating projections..." );
-					final ArrayList< ImagePlus > projections = createProjections( transformedWithImagePlusDimensionOrder );
+					final ArrayList< ImagePlus > projections = createProjections( registeredAndCropped );
 
 					Utils.log( "Saving projections..." );
 					saveImages( inputPath, projections );
 
-					final ImagePlus transformedImagePlus = ImageJFunctions.wrap( transformedWithImagePlusDimensionOrder, "transformed" );
-
 					// Save
+					Utils.log( "Transforming registered images to imagePlus for saving..." );
+					final RandomAccessibleInterval< T > transformedWithImagePlusDimensionOrder = Utils.copyAsArrayImg( Views.permute( registeredAndCropped, 2, 3 ) );
+					final ImagePlus transformedImagePlus = ImageJFunctions.wrap( transformedWithImagePlusDimensionOrder, "transformed" );
 					final String outputPath = inputPath + "-registered.tif";
 					Utils.log( "Saving registered image: " + outputPath );
 					FileSaver fileSaver = new FileSaver( transformedImagePlus );
@@ -210,7 +209,7 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 		}
 	}
 
-	public ArrayList< ImagePlus > createProjections( RandomAccessibleInterval< T > image )
+	public ArrayList< ImagePlus > createProjections( RandomAccessibleInterval< T > images )
 	{
 		int Z = 2;
 
@@ -218,16 +217,15 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 
 		ArrayList< ImagePlus > projections = new ArrayList<>(  );
 
-		for ( int channelId = 0; channelId < image.dimension( Utils.imagePlusChannelDimension ); ++channelId )
+		for ( int channelId = 0; channelId < images.dimension( 3 ); ++channelId )
 		{
 
-			RandomAccessibleInterval channel = Views.hyperSlice( image, Utils.imagePlusChannelDimension, channelId );
-			channel = Views.translate( channel, new long[]{ 0, 0, image.min( Z ) } );
+			RandomAccessibleInterval channel = Views.hyperSlice( images, 3, channelId );
 
 			Projection projection = new Projection( channel, Z, zMin, channel.max( Z ) );
 
 			final RandomAccessibleInterval maximum = projection.maximum();
-			final ImagePlus wrap = ImageJFunctions.wrap( maximum, "projection-C" + channelId );
+			final ImagePlus wrap = ImageJFunctions.wrap( maximum, "projection-channel" + channelId );
 
 			projections.add( wrap );
 		}
@@ -245,10 +243,8 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 
 	public RandomAccessibleInterval< T > registerImages( ImagePlus imagePlus, ShavenBabyRegistration registration )
 	{
-
 		RandomAccessibleInterval< T > images = getImages( imagePlus );
-
-		RandomAccessibleInterval< T > shavenBaby = getShavenBabyImage( numChannels, images );
+		RandomAccessibleInterval< T > shavenBaby = getShavenBabyImage( images );
 
 		final double[] calibration = Utils.getCalibration( imagePlus );
 
@@ -256,10 +252,10 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 		final AffineTransform3D registrationTransform = registration.computeRegistration( shavenBaby, calibration );
 
 		Utils.log( "Applying intensity correction to all channels...." );
-		final RandomAccessibleInterval< T > intensityCorrectedImages = RefractiveIndexMismatchCorrections.createIntensityCorrectedImages( images, calibration[ 2 ], settings.refractiveIndexIntensityCorrectionDecayLength,  );
+		final RandomAccessibleInterval< T > intensityCorrectedImages = RefractiveIndexMismatchCorrections.createIntensityCorrectedImages( images, calibration[ 2 ], settings.refractiveIndexIntensityCorrectionDecayLength  );
 
 		Utils.log( "Applying registration to all channels (at a resolution of " + settings.outputResolution + " micrometer) ..." );
-		final RandomAccessibleInterval< T > registeredImages = Transforms.transformAllChannels( intensityCorrectedImages, registrationTransform, 3 );
+		final RandomAccessibleInterval< T > registeredImages = Transforms.transformAllChannels( intensityCorrectedImages, registrationTransform );
 
 		return registeredImages;
 	}
@@ -276,23 +272,15 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 		}
 		else
 		{
-			Views.permute( images, Utils.imagePlusChannelDimension, 4 );
+			images = Views.permute( images, Utils.imagePlusChannelDimension, 3 );
 		}
+
 		return images;
 	}
 
-	public RandomAccessibleInterval< T > getShavenBabyImage( int numChannels, RandomAccessibleInterval< T > images )
+	public RandomAccessibleInterval< T > getShavenBabyImage( RandomAccessibleInterval< T > images )
 	{
-		RandomAccessibleInterval< T > svb;
-
-		if ( numChannels > 1 )
-		{
-			svb = Views.hyperSlice( images, Utils.imagePlusChannelDimension, shavenBabyChannelIndexOneBased - 1 );
-		}
-		else
-		{
-			svb = images;
-		}
+		RandomAccessibleInterval< T > svb = Views.hyperSlice( images, 3, shavenBabyChannelIndexOneBased - 1 );
 
 		return svb;
 	}

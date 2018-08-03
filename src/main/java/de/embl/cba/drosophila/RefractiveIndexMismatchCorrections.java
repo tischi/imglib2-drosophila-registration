@@ -81,25 +81,12 @@ public abstract class RefractiveIndexMismatchCorrections
 	{
 		ArrayList< RandomAccessibleInterval< T > > correctedImages = new ArrayList<>(  );
 
-		long numChannels = 1;
+		long numChannels = images.dimension( 3 );
 
-		if ( images.numDimensions() > 3 )
+		for ( long c = 0; c < numChannels; ++c )
 		{
-			numChannels = images.dimension( Utils.imagePlusChannelDimension );
-		}
-
-		if ( numChannels > 1 )
-		{
-			for ( int c = 0; c < numChannels; ++c )
-			{
-				final RandomAccessibleInterval< T > channel = Views.hyperSlice( images, Utils.imagePlusChannelDimension, c );
-				final RandomAccessibleInterval< T > intensityCorrectedChannel = createIntensityCorrectedChannel( zCalibration, intensityDecayLength, channel );
-				correctedImages.add( intensityCorrectedChannel );
-			}
-		}
-		else
-		{
-			final RandomAccessibleInterval< T > intensityCorrectedChannel = createIntensityCorrectedChannel( zCalibration, intensityDecayLength, images );
+			final RandomAccessibleInterval< T > channel = Views.hyperSlice( images, 3, c );
+			final RandomAccessibleInterval< T > intensityCorrectedChannel = createIntensityCorrectedChannel( zCalibration, intensityDecayLength, channel );
 			correctedImages.add( intensityCorrectedChannel );
 		}
 
