@@ -2,8 +2,8 @@ package de.embl.cba.drosophila.shavenbaby;
 
 public class ShavenBabyRegistrationSettings
 {
-	public static final String MANUAL_THRESHOLD = "Manual threshold";
-	public static final String HUANG_AUTO_THRESHOLD = "Huang auto threshold";
+	public static final String MANUAL_THRESHOLD = "Manual thresholdInUnitsOfBackgroundPeakHalfWidth";
+	public static final String HUANG_AUTO_THRESHOLD = "Huang auto thresholdInUnitsOfBackgroundPeakHalfWidth";
 
 	// all spatial values are in micrometer
 	// drosophila length: 420
@@ -28,7 +28,7 @@ public class ShavenBabyRegistrationSettings
 	public double watershedSeedsLocalMaximaDistanceThreshold = 3 * registrationResolution; // at least 3 pixels
 
 	public String thresholdModality = MANUAL_THRESHOLD;
-	public double threshold = 500;
+	public double thresholdInUnitsOfBackgroundPeakHalfWidth = 5.0;
 	public double closingRadius = 0;
 
 	public double outputImageSizeX = 500;

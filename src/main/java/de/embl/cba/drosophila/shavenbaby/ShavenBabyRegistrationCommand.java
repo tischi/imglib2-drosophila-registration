@@ -2,6 +2,7 @@ package de.embl.cba.drosophila.shavenbaby;
 
 import bdv.util.*;
 import de.embl.cba.drosophila.Projection;
+import de.embl.cba.drosophila.RefractiveIndexMismatchCorrections;
 import de.embl.cba.drosophila.Transforms;
 import de.embl.cba.drosophila.Utils;
 import ij.ImagePlus;
@@ -65,12 +66,12 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 	public String inputModality = FROM_DIRECTORY;
 
 	@Parameter
-	public String fileNameEndsWith = "downscaled-svb.tif";
+	public String fileNameEndsWith = ".czi,.lsm";
 
 	@Parameter
 	public int shavenBabyChannelIndexOneBased = settings.shavenBabyChannelIndexOneBased;
 
-	@Parameter( persist = false )
+	@Parameter
 	public boolean showIntermediateResults = settings.showIntermediateResults;
 
 	@Parameter
@@ -86,7 +87,7 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 	public String thresholdModality = settings.thresholdModality;
 
 	@Parameter
-	public double threshold = settings.threshold;
+	public double threshold = settings.thresholdInUnitsOfBackgroundPeakHalfWidth;
 
 	@Parameter
 	public double refractiveIndexScalingCorrectionFactor = settings.refractiveIndexScalingCorrectionFactor;
@@ -106,21 +107,20 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 
 		if ( inputModality.equals( CURRENT_IMAGE ) && imagePlus != null )
 		{
-			RandomAccessibleInterval< T > transformed = createTransformedImage( imagePlus, registration );
-			showWithBdv( transformed, "registered" );
-			ImageJFunctions.show( Views.permute( transformed, 2, 3 ) );
+//			RandomAccessibleInterval< T > transformed = registerImages( imagePlus, registration );
+//			showWithBdv( transformed, "registered" );
+//			ImageJFunctions.show( Views.permute( transformed, 2, 3 ) );
 		}
+
 
 		if ( inputModality.equals( FROM_DIRECTORY ) )
 		{
 			final File directory = uiService.chooseFile( null, FileWidget.DIRECTORY_STYLE );
 			String[] files = directory.list();
 
-			// for each name in the path array
 			for( String file : files )
 			{
-
-				if ( file.endsWith( fileNameEndsWith ) )
+				if ( acceptFile( fileNameEndsWith, file ) )
 				{
 					// Open
 					final String inputPath = directory + "/" + file;
@@ -133,18 +133,17 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 						continue;
 					}
 
-					RandomAccessibleInterval< T > transformed = createTransformedImage( imagePlus, registration );
+					RandomAccessibleInterval< T > registeredImages = registerImages( imagePlus, registration );
 
-					if ( settings.showIntermediateResults ) showWithBdv( transformed, "registered" );
+					final FinalInterval interval = createOutputImageInterval( registeredImages );
 
-					final FinalInterval interval = createOutputImageInterval( transformed );
+					final IntervalView< T > registeredAndCroppedView = Views.interval( registeredImages, interval );
 
-					final IntervalView< T > transformedCropped = Views.interval( transformed, interval );
+					final RandomAccessibleInterval< T > registeredAndCropped = Utils.copyAsArrayImg( registeredAndCroppedView );
 
-					if ( settings.showIntermediateResults ) showWithBdv( transformedCropped, "registered cropped" );
+					if ( settings.showIntermediateResults ) showWithBdv( registeredAndCropped, "registered" );
 
-					final RandomAccessibleInterval< T > transformedWithImagePlusDimensionOrder = Utils.copyAsArrayImg( Views.permute( transformedCropped, 2, 3 ) );
-
+					final RandomAccessibleInterval< T > transformedWithImagePlusDimensionOrder = Utils.copyAsArrayImg( Views.permute( registeredAndCropped, 2, 3 ) );
 
 					Utils.log( "Creating projections..." );
 					final ArrayList< ImagePlus > projections = createProjections( transformedWithImagePlusDimensionOrder );
@@ -167,6 +166,21 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 		Utils.log( "Done!" );
 
 
+	}
+
+	public boolean acceptFile( String fileNameEndsWith, String file )
+	{
+		final String[] fileNameEndsWithList = fileNameEndsWith.split( "," );
+
+		for ( String endsWith : fileNameEndsWithList )
+		{
+			if ( file.endsWith( endsWith.trim() ) )
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	public FinalInterval createOutputImageInterval( RandomAccessibleInterval rai )
@@ -229,32 +243,57 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 		BdvFunctions.showPoints( points, "origin", BdvOptions.options().addTo( bdv ) );
 	}
 
-	public RandomAccessibleInterval< T > createTransformedImage( ImagePlus imagePlus, ShavenBabyRegistration registration )
+	public RandomAccessibleInterval< T > registerImages( ImagePlus imagePlus, ShavenBabyRegistration registration )
 	{
-		RandomAccessibleInterval< T > allChannels = ImageJFunctions.wrap( imagePlus );
-		RandomAccessibleInterval< T > svb = getShavenBabyImage( imagePlus.getNChannels(), allChannels );
+
+		RandomAccessibleInterval< T > images = getImages( imagePlus );
+
+		RandomAccessibleInterval< T > shavenBaby = getShavenBabyImage( numChannels, images );
+
+		final double[] calibration = Utils.getCalibration( imagePlus );
 
 		Utils.log( "Computing registration...." );
-		final AffineTransform3D registrationTransform = registration.computeRegistration( svb, Utils.getCalibration( imagePlus ) );
+		final AffineTransform3D registrationTransform = registration.computeRegistration( shavenBaby, calibration );
 
-		Utils.log( "Transforming all channels to a final resolution of " + settings.outputResolution + " micrometer ..." );
-		final RandomAccessibleInterval< T > allChannelsTransformed = Transforms.transformAllChannels( allChannels, registrationTransform, imagePlus.getNChannels() );
+		Utils.log( "Applying intensity correction to all channels...." );
+		final RandomAccessibleInterval< T > intensityCorrectedImages = RefractiveIndexMismatchCorrections.createIntensityCorrectedImages( images, calibration[ 2 ], settings.refractiveIndexIntensityCorrectionDecayLength,  );
 
-		return allChannelsTransformed;
+		Utils.log( "Applying registration to all channels (at a resolution of " + settings.outputResolution + " micrometer) ..." );
+		final RandomAccessibleInterval< T > registeredImages = Transforms.transformAllChannels( intensityCorrectedImages, registrationTransform, 3 );
+
+		return registeredImages;
 	}
 
-	public RandomAccessibleInterval< T > getShavenBabyImage( int numChannels, RandomAccessibleInterval< T > allChannels )
+	public RandomAccessibleInterval< T > getImages( ImagePlus imagePlus )
+	{
+		RandomAccessibleInterval< T > images = ImageJFunctions.wrap( imagePlus );
+
+		int numChannels = imagePlus.getNChannels();
+
+		if ( numChannels == 1 )
+		{
+			Views.addDimension( images );
+		}
+		else
+		{
+			Views.permute( images, Utils.imagePlusChannelDimension, 4 );
+		}
+		return images;
+	}
+
+	public RandomAccessibleInterval< T > getShavenBabyImage( int numChannels, RandomAccessibleInterval< T > images )
 	{
 		RandomAccessibleInterval< T > svb;
 
 		if ( numChannels > 1 )
 		{
-			svb = Views.hyperSlice( allChannels, Utils.imagePlusChannelDimension, shavenBabyChannelIndexOneBased - 1 );
+			svb = Views.hyperSlice( images, Utils.imagePlusChannelDimension, shavenBabyChannelIndexOneBased - 1 );
 		}
 		else
 		{
-			svb = allChannels;
+			svb = images;
 		}
+
 		return svb;
 	}
 
@@ -268,7 +307,7 @@ public class ShavenBabyRegistrationCommand<T extends RealType<T> & NativeType< T
 		settings.refractiveIndexScalingCorrectionFactor = refractiveIndexScalingCorrectionFactor;
 		settings.refractiveIndexIntensityCorrectionDecayLength = refractiveIndexIntensityCorrectionDecayLength;
 		settings.thresholdModality = thresholdModality;
-		settings.threshold = threshold;
+		settings.thresholdInUnitsOfBackgroundPeakHalfWidth = threshold;
 	}
 
 

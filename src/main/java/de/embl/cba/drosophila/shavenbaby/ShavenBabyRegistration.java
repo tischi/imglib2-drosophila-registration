@@ -61,47 +61,72 @@ public class ShavenBabyRegistration
 
 		AffineTransform3D registration = new AffineTransform3D();
 
-		/**
-		 *  Refractive index corrections
-		 */
+		double[] registrationCalibration = getRegistrationCalibration();
 
-		Utils.log( "Refractive index corrections..." );
+		Utils.log( "Refractive index scaling correction..." );
 
 		RefractiveIndexMismatchCorrections.correctCalibration( inputCalibration, settings.refractiveIndexScalingCorrectionFactor );
 
-		final RandomAccessibleInterval< T > intensityCorrected = Utils.copyAsArrayImg( input );
-
-		RefractiveIndexMismatchCorrections.correctIntensity( intensityCorrected, inputCalibration[ Z ], settings.backgroundIntensity, settings.refractiveIndexIntensityCorrectionDecayLength );
-
-		if ( settings.showIntermediateResults ) show( intensityCorrected, "intensity and calibration corrected", null, inputCalibration, false );
 
 		/**
 		 *  Down-sampling to registration resolution
 		 */
 
+		
 		Utils.log( "Down-sampling to registration resolution..." );
 
-		final RandomAccessibleInterval< T > downscaled = Algorithms.createDownscaledArrayImg( intensityCorrected, getScalingFactors( inputCalibration, settings.registrationResolution ) );
+		final RandomAccessibleInterval< T > downscaled = Algorithms.createDownscaledArrayImg( input, getScalingFactors( inputCalibration, settings.registrationResolution ) );
 
-		double[] registrationCalibration = getRegistrationCalibration();
-
-		if ( settings.showIntermediateResults ) show( downscaled, "downscaled", null, registrationCalibration, false );
+		if ( settings.showIntermediateResults ) show( downscaled, "at registration resolution", null, registrationCalibration, false );
 
 
 		/**
-		 * Threshold
+		 *  Compute offset and threshold
 		 */
 
-		RandomAccessibleInterval< BitType > mask = createMask( downscaled, registrationCalibration );
+
+		Utils.log( "Computing offset and threshold..." );
+
+		final IntensityHistogram intensityHistogram = new IntensityHistogram( downscaled, 65535.0, 5.0 );
+
+		PositionAndValue mode = intensityHistogram.getMode();
+
+		final PositionAndValue rightHandHalfMaximum = intensityHistogram.getRightHandHalfMaximum();
+
+		double thresholdAfterIntensityCorrection = ( rightHandHalfMaximum.position - mode.position ) * settings.thresholdInUnitsOfBackgroundPeakHalfWidth;
+
+		Utils.log( "Offset: " + mode.position );
+		Utils.log( "Threshold: " + ( thresholdAfterIntensityCorrection + mode.position ) );
+
+		/**
+		 *  Refractive index corrections
+		 */
+		
+		Utils.log( "Refractive index intensity correction..." );
+
+		final RandomAccessibleInterval< T > intensityCorrected = Utils.copyAsArrayImg( downscaled );
+
+		RefractiveIndexMismatchCorrections.correctIntensity( intensityCorrected, registrationCalibration[ Z ], mode.position, settings.refractiveIndexIntensityCorrectionDecayLength );
+
+		if ( settings.showIntermediateResults ) show( intensityCorrected, "intensity corrected", null, registrationCalibration, false );
+
+
+		/**
+		 * Create mask
+		 */
+
+		RandomAccessibleInterval< BitType > mask = createMask( intensityCorrected, thresholdAfterIntensityCorrection );
+
+		if ( settings.showIntermediateResults ) show( mask, "mask", null, registrationCalibration, false );
 
 
 		/**
 		 * Morphological closing
 		 */
 
-//		RandomAccessibleInterval< BitType > closed = createClosedImage( registrationCalibration, mask );
+		RandomAccessibleInterval< BitType > closed = createClosedImage( mask );
 
-		RandomAccessibleInterval< BitType > closed = mask;
+		if ( settings.showIntermediateResults ) show( closed, "closed", null, registrationCalibration, false );
 
 		/**
 		 * Distance transform
@@ -109,7 +134,7 @@ public class ShavenBabyRegistration
 		 * Note: EUCLIDIAN distances are returned as squared distances
 		 */
 
-		Utils.log( "Distance transform...");
+		Utils.log( "Distance transform..." );
 
 		final RandomAccessibleInterval< DoubleType > doubleBinary = Converters.convert( closed, ( i, o ) -> o.set( i.get() ? Double.MAX_VALUE : 0 ), new DoubleType() );
 
@@ -117,7 +142,8 @@ public class ShavenBabyRegistration
 
 		DistanceTransform.transform( doubleBinary, distance, DistanceTransform.DISTANCE_TYPE.EUCLIDIAN, 1.0D );
 
-		if ( settings.showIntermediateResults ) show( distance, "distance transform", null, registrationCalibration, false );
+		if ( settings.showIntermediateResults )
+			show( distance, "distance transform", null, registrationCalibration, false );
 
 		/**
 		 * Watershed seeds
@@ -130,7 +156,7 @@ public class ShavenBabyRegistration
 		 * Watershed
 		 */
 
-		Utils.log( "Watershed...");
+		Utils.log( "Watershed..." );
 
 		// prepare result label image
 		final Img< IntType > watershedLabelImg = ArrayImgs.ints( Intervals.dimensionsAsLongArray( mask ) );
@@ -145,15 +171,14 @@ public class ShavenBabyRegistration
 
 		Utils.applyMask( watershedLabelImg, closed );
 
-		if ( settings.showIntermediateResults )
-			show( watershedLabelImg, "watershed", null, registrationCalibration, false );
+		if ( settings.showIntermediateResults ) show( watershedLabelImg, "watershed", null, registrationCalibration, false );
 
 
 		/**
 		 * Get central embryo
 		 */
 
-		Utils.log( "Get central embryo...");
+		Utils.log( "Get central embryo..." );
 
 		final LabelRegion< Integer > centralObjectRegion = getCentralObjectLabelRegion( watershedLabeling );
 
@@ -225,12 +250,11 @@ public class ShavenBabyRegistration
 		if ( settings.showIntermediateResults )
 			show( Transforms.createTransformedView( intensityCorrected, registration ), "aligned input data ( " + settings.outputResolution + " um )", origin(), registrationCalibration, false );
 
-
 		return registration;
 
 	}
 
-	public RandomAccessibleInterval< BitType > createClosedImage( double[] registrationCalibration, RandomAccessibleInterval< BitType > mask )
+	public RandomAccessibleInterval< BitType > createClosedImage( RandomAccessibleInterval< BitType > mask )
 	{
 		RandomAccessibleInterval< BitType > closed = Utils.copyAsArrayImg( mask );
 
@@ -239,22 +263,19 @@ public class ShavenBabyRegistration
 			Utils.log( "Morphological closing...");
 			Shape closingShape = new HyperSphereShape( ( int ) ( settings.closingRadius / settings.registrationResolution ) );
 			Closing.close( Views.extendBorder( mask ), Views.iterable( closed ), closingShape, 1 );
-			if ( settings.showIntermediateResults ) show( closed, "closed", null, registrationCalibration, false );
 		}
+
 		return closed;
 	}
 
-	public < T extends RealType< T > & NativeType< T > > RandomAccessibleInterval< BitType > createMask( RandomAccessibleInterval< T > downscaled, double[] registrationCalibration )
+	public < T extends RealType< T > & NativeType< T > >
+	RandomAccessibleInterval< BitType > createMask( RandomAccessibleInterval< T > downscaled, double threshold )
 	{
 		Utils.log( "Creating mask...");
-
-		double threshold = getThreshold( downscaled );
 
 		RandomAccessibleInterval< BitType > mask = Converters.convert( downscaled, ( i, o ) -> o.set( i.getRealDouble() > threshold ? true : false ), new BitType() );
 
 		mask = opService.morphology().fillHoles( mask );
-
-		if ( settings.showIntermediateResults ) show( mask, "mask", null, registrationCalibration, false );
 
 		return mask;
 	}
@@ -275,7 +296,7 @@ public class ShavenBabyRegistration
 		}
 		else
 		{
-			threshold= settings.threshold;
+			threshold= settings.thresholdInUnitsOfBackgroundPeakHalfWidth;
 		}
 		return threshold;
 	}
@@ -458,7 +479,7 @@ public class ShavenBabyRegistration
 	 Phil
 
 	 final RandomAccessibleInterval< UnsignedByteType > binary = Converters.convert(
-	 downscaled, ( i, o ) -> o.set( i.getRealDouble() > settings.threshold ? 255 : 0 ), new UnsignedByteType() );
+	 downscaled, ( i, o ) -> o.set( i.getRealDouble() > settings.thresholdInUnitsOfBackgroundPeakHalfWidth ? 255 : 0 ), new UnsignedByteType() );
 
 	 if ( settings.showIntermediateResults ) show( binary, "binary", null, calibration, false );
 

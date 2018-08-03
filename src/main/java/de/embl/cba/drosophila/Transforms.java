@@ -64,10 +64,10 @@ public abstract class Transforms< T extends InvertibleRealTransform & Concatenab
 
 	public static < T extends NumericType< T > & NativeType< T > >
 	RandomAccessibleInterval createTransformedView( RandomAccessibleInterval< T > rai,
-													InvertibleRealTransform combinedTransform )
+													InvertibleRealTransform transform )
 	{
-		final RandomAccessible transformedRA = createTransformedRaView( rai, combinedTransform, new NLinearInterpolatorFactory() );
-		final FinalInterval transformedInterval = createTransformedInterval( rai, combinedTransform );
+		final RandomAccessible transformedRA = createTransformedRaView( rai, transform, new NLinearInterpolatorFactory() );
+		final FinalInterval transformedInterval = createTransformedInterval( rai, transform );
 		final RandomAccessibleInterval< T > transformedIntervalView = Views.interval( transformedRA, transformedInterval );
 
 		return transformedIntervalView;
@@ -205,21 +205,23 @@ public abstract class Transforms< T extends InvertibleRealTransform & Concatenab
 	}
 
 	public static <T extends RealType<T> & NativeType< T > >
-	RandomAccessibleInterval< T > transformAllChannels( RandomAccessibleInterval< T > allChannels, AffineTransform3D registrationTransform, int numChannels )
+	RandomAccessibleInterval< T > transformAllChannels( RandomAccessibleInterval< T > images, AffineTransform3D registrationTransform, int channelDimension )
 	{
 		ArrayList< RandomAccessibleInterval< T > > transformedChannels = new ArrayList<>(  );
 
-		if ( numChannels > 1 )
+		if ( channelDimension > 0 )
 		{
+			long numChannels = images.dimension( channelDimension );
+
 			for ( int c = 0; c < numChannels; ++c )
 			{
-				final RandomAccessibleInterval< T > channel = Views.hyperSlice( allChannels, Utils.imagePlusChannelDimension, c );
+				final RandomAccessibleInterval< T > channel = Views.hyperSlice( images, Utils.imagePlusChannelDimension, c );
 				transformedChannels.add( createTransformedView( channel, registrationTransform ) );
 			}
 		}
 		else
 		{
-			transformedChannels.add( createTransformedView( allChannels, registrationTransform ) );
+			transformedChannels.add( createTransformedView( images, registrationTransform ) );
 		}
 
 		return Views.stack( transformedChannels );

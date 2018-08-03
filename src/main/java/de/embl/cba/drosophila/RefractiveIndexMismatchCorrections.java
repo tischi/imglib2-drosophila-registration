@@ -1,9 +1,12 @@
 package de.embl.cba.drosophila;
 
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.view.Views;
+
+import java.util.ArrayList;
 
 import static de.embl.cba.drosophila.Constants.Z;
 import static java.lang.Math.exp;
@@ -46,7 +49,7 @@ public abstract class RefractiveIndexMismatchCorrections
 	}
 
 	public static < T extends RealType< T > & NativeType< T > >
-	void correctIntensity( RandomAccessibleInterval< T > rai, double zCalibration, double backgroundIntensity, double intensityDecayLength )
+	void correctIntensity( RandomAccessibleInterval< T > rai, double zCalibration, double intensityOffset, double intensityDecayLength )
 	{
 		for ( long z = rai.min( Z ); z <= rai.max( Z ); ++z )
 		{
@@ -56,13 +59,13 @@ public abstract class RefractiveIndexMismatchCorrections
 
 			Views.iterable( slice ).forEach( t ->
 					{
-						if ( ( t.getRealDouble() - backgroundIntensity ) < 0 )
+						if ( ( t.getRealDouble() - intensityOffset ) < 0 )
 						{
 							t.setReal( 0 );
 						}
 						else
 						{
-							t.setReal( t.getRealDouble() - backgroundIntensity );
+							t.setReal( t.getRealDouble() - intensityOffset );
 							t.mul( intensityCorrectionFactor );
 						}
 
@@ -71,6 +74,50 @@ public abstract class RefractiveIndexMismatchCorrections
 
 		}
 
+	}
+
+	public static <T extends RealType<T> & NativeType< T > >
+	RandomAccessibleInterval< T > createIntensityCorrectedImages( RandomAccessibleInterval< T > images, double zCalibration, double intensityDecayLength )
+	{
+		ArrayList< RandomAccessibleInterval< T > > correctedImages = new ArrayList<>(  );
+
+		long numChannels = 1;
+
+		if ( images.numDimensions() > 3 )
+		{
+			numChannels = images.dimension( Utils.imagePlusChannelDimension );
+		}
+
+		if ( numChannels > 1 )
+		{
+			for ( int c = 0; c < numChannels; ++c )
+			{
+				final RandomAccessibleInterval< T > channel = Views.hyperSlice( images, Utils.imagePlusChannelDimension, c );
+				final RandomAccessibleInterval< T > intensityCorrectedChannel = createIntensityCorrectedChannel( zCalibration, intensityDecayLength, channel );
+				correctedImages.add( intensityCorrectedChannel );
+			}
+		}
+		else
+		{
+			final RandomAccessibleInterval< T > intensityCorrectedChannel = createIntensityCorrectedChannel( zCalibration, intensityDecayLength, images );
+			correctedImages.add( intensityCorrectedChannel );
+		}
+
+		return Views.stack( correctedImages );
+	}
+
+	public static < T extends RealType< T > & NativeType< T > > RandomAccessibleInterval< T > createIntensityCorrectedChannel( double zCalibration, double intensityDecayLength, RandomAccessibleInterval< T > channel )
+	{
+		final double intensityOffset = getIntensityOffset( channel );
+		final RandomAccessibleInterval< T > intensityCorrectedChannel = Utils.copyAsArrayImg( channel );
+		correctIntensity( intensityCorrectedChannel, zCalibration, intensityOffset, intensityDecayLength );
+		return intensityCorrectedChannel;
+	}
+
+	public static < T extends RealType< T > & NativeType< T > > double getIntensityOffset( RandomAccessibleInterval< T > channel )
+	{
+		final IntensityHistogram intensityHistogram = new IntensityHistogram( channel, 65535, 5 );
+		return intensityHistogram.getMode().position;
 	}
 
 	public static void correctCalibration( double[] calibration, double correctionFactor )
