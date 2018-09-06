@@ -1,4 +1,4 @@
-import de.embl.cba.drosophila.shavenbaby.ShavenBabyRegistrationCommand;
+import de.embl.cba.morphometrics.drosophila.shavenbaby.ShavenBabyRegistrationCommand;
 import net.imagej.ImageJ;
 
 public class ShavenBabyRegistrationCommandTest
@@ -11,7 +11,7 @@ public class ShavenBabyRegistrationCommandTest
 
 
 		// Load and show data
-//		String path = "/Users/tischer/Documents/justin-crocker-drosophila-registration--data/E3NWT-04-downscaled-svb.tif";
+//		String path = "/Users/tischer/Documents/justin-crocker-morphometrics-registration--data/E3NWT-04-downscaled-svb.tif";
 //		ImagePlus imp = IJ.openImage( path ); imp.show();
 
 		// invoke the plugin

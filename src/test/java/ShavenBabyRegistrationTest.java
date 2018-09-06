@@ -1,6 +1,6 @@
-import de.embl.cba.drosophila.Utils;
-import de.embl.cba.drosophila.shavenbaby.ShavenBabyRegistration;
-import de.embl.cba.drosophila.shavenbaby.ShavenBabyRegistrationSettings;
+import de.embl.cba.morphometrics.Utils;
+import de.embl.cba.morphometrics.drosophila.shavenbaby.ShavenBabyRegistration;
+import de.embl.cba.morphometrics.drosophila.shavenbaby.ShavenBabyRegistrationSettings;
 import ij.IJ;
 import ij.ImagePlus;
 import net.imagej.ImageJ;
@@ -42,10 +42,10 @@ public class ShavenBabyRegistrationTest
 
 
 //		final String path = ShavenBabyRegistrationTest.class.getResource( "/ShavenBaby01.zip" ).getFile();
-		final String path = "/Users/tischer/Documents/justin-crocker-drosophila-registration--data/E3NWT-07-downscaled-svb.tif";
+		final String path = "/Users/tischer/Documents/justin-crocker-morphometrics-registration--data/E3NWT-07-downscaled-svb.tif";
 		final ImagePlus imagePlus = IJ.openImage( path );
 
-//		final String path = "/Users/tischer/Documents/justin-crocker-drosophila-registration--data/E3NWT-02.czi";
+//		final String path = "/Users/tischer/Documents/justin-crocker-morphometrics-registration--data/E3NWT-02.czi";
 //		final ImagePlus imagePlus = openWithBioFormats( path );
 //		RandomAccessibleInterval< T > svb = Utils.copyAsArrayImg( Views.hyperSlice( input, Utils.imagePlusChannelDimension, settings.shavenBabyChannelIndexOneBased ) )
 

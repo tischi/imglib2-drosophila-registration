@@ -1,7 +1,7 @@
-import de.embl.cba.drosophila.Transforms;
-import de.embl.cba.drosophila.Utils;
-import de.embl.cba.drosophila.dapi.DapiRegistration;
-import de.embl.cba.drosophila.dapi.DapiRegistrationSettings;
+import de.embl.cba.morphometrics.Transforms;
+import de.embl.cba.morphometrics.Utils;
+import de.embl.cba.morphometrics.drosophila.dapi.DapiRegistration;
+import de.embl.cba.morphometrics.drosophila.dapi.DapiRegistrationSettings;
 import ij.IJ;
 import ij.ImagePlus;
 import net.imagej.ImageJ;
@@ -12,8 +12,8 @@ import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 
-import static de.embl.cba.drosophila.Utils.asRealPointList;
-import static de.embl.cba.drosophila.viewing.BdvImageViewer.show;
+import static de.embl.cba.morphometrics.Utils.asRealPointList;
+import static de.embl.cba.morphometrics.viewing.BdvImageViewer.show;
 
 public class DapiRegistrationTest
 {

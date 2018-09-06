@@ -9,7 +9,7 @@
 	</parent>
 
 	<artifactId>imglib2-drosophila-registration</artifactId>
-	<version>0.3.0</version>
+	<version>0.3.1</version>
 
 	<name>ImgLib2 Drosophila Registration</name>
 	<description>TODO</description>
