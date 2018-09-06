@@ -41,7 +41,7 @@ public class Ellipsoids
 
 		ellipsoidParameters.radii = computeRadii( svd.getS() );
 
-		ellipsoidParameters.anglesInDegrees = computeAngles( svd.getU() );
+		ellipsoidParameters.eulerAnglesInDegrees = computeLongestAxisAngles( svd.getU() );
 
 		return ellipsoidParameters;
 
@@ -152,28 +152,28 @@ public class Ellipsoids
 		return radii;
 	}
 
-	private static double[] computeAngles( Matrix sdvU )
+	private static double[] computeLongestAxisAngles( Matrix sdvU )
 	{
 
 		double[] angles = new double[ 3 ];
 
 		// extract |cos(theta)|
-		double tmp = hypot(sdvU.get(1, 1), sdvU.get(2, 1));
+		double tmp = hypot( sdvU.get(1, 1), sdvU.get(2, 1) );
 		double phi, theta, psi;
 
 		// avoid dividing by 0
 		if (tmp > 16 * Double.MIN_VALUE)
 		{
 			// normal case: theta <> 0
-			psi     = atan2( sdvU.get(2, 1), sdvU.get(2, 2));
-			theta   = atan2(-sdvU.get(2, 0), tmp);
-			phi     = atan2( sdvU.get(1, 0), sdvU.get(0, 0));
+			psi     = atan2(  sdvU.get(2, 1), sdvU.get(2, 2) );
+			theta   = atan2( -sdvU.get(2, 0), tmp);
+			phi     = atan2(  sdvU.get(1, 0), sdvU.get(0, 0) );
 		}
 		else
 		{
 			// theta is around 0
-			psi     = atan2(-sdvU.get(1, 2), sdvU.get(1,1));
-			theta   = atan2(-sdvU.get(2, 0), tmp);
+			psi     = atan2( -sdvU.get(1, 2), sdvU.get(1,1) );
+			theta   = atan2( -sdvU.get(2, 0), tmp );
 			phi     = 0;
 		}
 
@@ -194,12 +194,11 @@ public class Ellipsoids
 		translation = translation.inverse();
 
 		AffineTransform3D rotation = new AffineTransform3D();
-		rotation.rotate( Z, - toRadians( ellipsoidParameters.anglesInDegrees[ PHI ] ) );
-		rotation.rotate( Y, - toRadians( ellipsoidParameters.anglesInDegrees[ THETA ] ) );
-		rotation.rotate( X, - toRadians( ellipsoidParameters.anglesInDegrees[ PSI ] ) );
+		rotation.rotate( Z, - toRadians( ellipsoidParameters.eulerAnglesInDegrees[ PHI ] ) );
+		rotation.rotate( Y, - toRadians( ellipsoidParameters.eulerAnglesInDegrees[ THETA ] ) );
+		rotation.rotate( X, - toRadians( ellipsoidParameters.eulerAnglesInDegrees[ PSI ] ) );
 
 		AffineTransform3D combinedTransform = translation.preConcatenate( rotation );
-
 
 		return combinedTransform;
 

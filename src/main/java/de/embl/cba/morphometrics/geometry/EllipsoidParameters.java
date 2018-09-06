@@ -7,6 +7,6 @@ public class EllipsoidParameters
 
 	public double[] center = new double[ 3 ];
 	public double[] radii = new double[ 3 ];
-	public double[] anglesInDegrees = new double[ 3 ];
+	public double[] eulerAnglesInDegrees = new double[ 3 ];
 
 }
