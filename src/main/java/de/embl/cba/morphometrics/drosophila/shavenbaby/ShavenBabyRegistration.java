@@ -61,7 +61,7 @@ public class ShavenBabyRegistration
 
 		AffineTransform3D registration = new AffineTransform3D();
 
-		double[] registrationCalibration = getRegistrationCalibration();
+		double[] registrationCalibration = Utils.get3dDoubleArray( settings.registrationResolution );
 
 		Utils.log( "Refractive index scaling correction..." );
 
@@ -75,7 +75,7 @@ public class ShavenBabyRegistration
 		
 		Utils.log( "Down-sampling to registration resolution..." );
 
-		final RandomAccessibleInterval< T > downscaled = Algorithms.createDownscaledArrayImg( input, getScalingFactors( inputCalibration, settings.registrationResolution ) );
+		final RandomAccessibleInterval< T > downscaled = Algorithms.createIsotropicArrayImg( input, getScalingFactors( inputCalibration, settings.registrationResolution ) );
 
 		if ( settings.showIntermediateResults ) show( downscaled, "at registration resolution", null, registrationCalibration, false );
 
@@ -447,13 +447,6 @@ public class ShavenBabyRegistration
 		for ( int d : XYZ ) labelingRandomAccess.setPosition( labeling.dimension( d ) / 2, d );
 		int centralIndex = labelingRandomAccess.get().getIndex().getInteger();
 		return labeling.getMapping().labelsAtIndex( centralIndex ).iterator().next();
-	}
-
-	private double[] getRegistrationCalibration()
-	{
-		double[] registrationCalibration = new double[ 3 ];
-		Arrays.fill( registrationCalibration, settings.registrationResolution );
-		return registrationCalibration;
 	}
 
 	//

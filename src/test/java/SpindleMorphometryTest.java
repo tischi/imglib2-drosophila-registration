@@ -23,8 +23,8 @@ public class SpindleMorphometryTest <T extends RealType<T> & NativeType< T > >
 		ImageJ imagej = new ImageJ();
 		imagej.ui().showUI();
 
-		final String dapiPath = SpindleMorphometryTest.class.getResource( "spindle/test001-C00.tif" ).getFile();
-		final String tubulinPath = SpindleMorphometryTest.class.getResource( "spindle/test001-C01.tif" ).getFile();
+		final String dapiPath = SpindleMorphometryTest.class.getResource( "spindle/test001-C01.tif" ).getFile();
+		final String tubulinPath = SpindleMorphometryTest.class.getResource( "spindle/test001-C00.tif" ).getFile();
 
 		final ImagePlus dapiImp = IJ.openImage( dapiPath );
 		final ImagePlus tubulinImp = IJ.openImage( tubulinPath );
@@ -39,9 +39,12 @@ public class SpindleMorphometryTest <T extends RealType<T> & NativeType< T > >
 		settings.inputCalibration = Utils.getCalibration( dapiImp );
 		settings.dapi = dapi;
 		settings.tubulin = tubulin;
+		settings.workingVoxelSize = 0.25;
+		settings.maxValue = Math.pow( 2, dapiImp.getBitDepth() ) - 1.0;
 
 		SpindleMorphometry morphometry = new SpindleMorphometry( settings, imagej.op() );
-		
+		morphometry.run();
+
 	}
 
 	public static void main( String... args )

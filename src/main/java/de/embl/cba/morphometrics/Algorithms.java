@@ -6,6 +6,7 @@ import net.imglib2.algorithm.neighborhood.Neighborhood;
 import net.imglib2.algorithm.neighborhood.Shape;
 import net.imglib2.img.ImgFactory;
 import net.imglib2.img.array.ArrayImgFactory;
+import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.interpolation.randomaccess.NearestNeighborInterpolatorFactory;
 import net.imglib2.loops.LoopBuilder;
 import net.imglib2.realtransform.RealViews;
@@ -24,7 +25,7 @@ public class Algorithms
 {
 
 	public static < T extends RealType< T > & NativeType< T > >
-	RandomAccessibleInterval< T > createDownscaledArrayImg( RandomAccessibleInterval< T > input, double[] scalingFactors )
+	RandomAccessibleInterval< T > createIsotropicArrayImg( RandomAccessibleInterval< T > input, double[] scalingFactors )
 	{
 		assert scalingFactors.length == input.numDimensions();
 
@@ -38,18 +39,17 @@ public class Algorithms
 		 * Sample values from blurred image
 		 */
 
-		final RandomAccessibleInterval< T > downscaled = createSubsampledArrayImg( blurred, scalingFactors );
+		final RandomAccessibleInterval< T > resampled = createResampledArrayImg( blurred, scalingFactors );
 
-		return downscaled;
+		return resampled;
 	}
 
 	private static < T extends RealType< T > & NativeType< T > >
-	RandomAccessibleInterval< T > createSubsampledArrayImg( RandomAccessibleInterval< T > input, double[] scalingFactors )
+	RandomAccessibleInterval< T > createResampledArrayImg( RandomAccessibleInterval< T > input, double[] scalingFactors )
 	{
 		// TODO: is there a simple way to do this?
-
 		Scale scale = new Scale( scalingFactors );
-		RealRandomAccessible< T > rra = Views.interpolate( Views.extendBorder( input ), new NearestNeighborInterpolatorFactory<>() );
+		RealRandomAccessible< T > rra = Views.interpolate( Views.extendBorder( input ), new NLinearInterpolatorFactory<>() );
 		rra = RealViews.transform( rra, scale );
 		final RandomAccessible< T > raster = Views.raster( rra );
 		final RandomAccessibleInterval< T > output = Views.interval( raster, createTransformedInterval( input, scale ) );

@@ -35,6 +35,7 @@ import net.imglib2.view.Views;
 import org.scijava.log.LogService;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static de.embl.cba.morphometrics.Constants.*;
@@ -677,4 +678,10 @@ public class Utils
 	}
 
 
+	public static double[] get3dDoubleArray( double value )
+	{
+		double[] registrationCalibration = new double[ 3 ];
+		Arrays.fill( registrationCalibration, value );
+		return registrationCalibration;
+	}
 }

@@ -9,6 +9,7 @@ import net.imagej.ops.OpService;
 import net.imglib2.Cursor;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealPoint;
+import net.imglib2.algorithm.labeling.ConnectedComponents;
 import net.imglib2.algorithm.morphology.Closing;
 import net.imglib2.algorithm.morphology.distance.DistanceTransform;
 import net.imglib2.algorithm.neighborhood.HyperSphereShape;
@@ -43,7 +44,7 @@ import static de.embl.cba.morphometrics.viewing.BdvImageViewer.show;
 import static java.lang.Math.toRadians;
 
 
-public class SpindleMorphometry
+public class SpindleMorphometry  < T extends RealType< T > & NativeType< T > >
 {
 
 	final SpindleMorphometrySettings settings;
@@ -53,6 +54,73 @@ public class SpindleMorphometry
 	{
 		this.settings = settings;
 		this.opService = opService;
+	}
+
+	public void run()
+	{
+
+		/**
+		 *  Make isotropic
+		 */
+
+		Utils.log( "Create isotropic image..." );
+
+		final double[] workingCalibration = Utils.get3dDoubleArray( settings.workingVoxelSize );
+
+		final RandomAccessibleInterval< T > dapi = Algorithms.createIsotropicArrayImg( settings.dapi, getScalingFactors( settings.inputCalibration, settings.workingVoxelSize ) );
+
+		if ( settings.showIntermediateResults ) show( dapi, "with isotropic resolution", null, workingCalibration, false );
+
+
+		/**
+		 *  Compute offset and threshold
+		 */
+
+		Utils.log( "Computing offset and threshold..." );
+
+		final IntensityHistogram intensityHistogram = new IntensityHistogram( dapi, settings.maxValue, 2.0 );
+
+		PositionAndValue mode = intensityHistogram.getMode();
+
+		final PositionAndValue rightHandHalfMaximum = intensityHistogram.getRightHandHalfMaximum();
+
+		double threshold = ( rightHandHalfMaximum.position - mode.position ) * settings.thresholdInUnitsOfBackgroundPeakHalfWidth;
+
+		Utils.log( "Offset: " + mode.position );
+		Utils.log( "Threshold: " + ( threshold + mode.position ) );
+
+		/**
+		 * Create mask
+		 */
+
+		RandomAccessibleInterval< BitType > mask = createMask( dapi, threshold );
+
+		if ( settings.showIntermediateResults ) show( mask, "mask", null, workingCalibration, false );
+
+
+		/**
+		 * Morphological closing
+		 */
+
+		RandomAccessibleInterval< BitType > closed = createClosedImage( mask );
+
+		if ( settings.showIntermediateResults ) show( closed, "closed", null, workingCalibration, false );
+
+		/**
+		 * Extract central object
+		 */
+
+		Utils.log( "Extracting central object..." );
+
+		final ImgLabeling< Integer, IntType > labelImg = Utils.createLabelImg( closed );
+
+		final LabelRegion< Integer > centralObjectRegion = getCentralObjectLabelRegion( labelImg );
+
+		final Img< BitType > centralObjectMask = createBitTypeMaskFromLabelRegion( centralObjectRegion, Intervals.dimensionsAsLongArray( labelImg ) );
+
+		if ( settings.showIntermediateResults )
+			show( centralObjectMask, "central object", null, workingCalibration, false );
+
 	}
 
 	public < T extends RealType< T > & NativeType< T > >
@@ -75,7 +143,7 @@ public class SpindleMorphometry
 
 		Utils.log( "Down-sampling to registration resolution..." );
 
-		final RandomAccessibleInterval< T > downscaled = Algorithms.createDownscaledArrayImg( input, getScalingFactors( inputCalibration, settings.registrationResolution ) );
+		final RandomAccessibleInterval< T > downscaled = Algorithms.createIsotropicArrayImg( input, getScalingFactors( inputCalibration, settings.workingVoxelSize ) );
 
 		if ( settings.showIntermediateResults ) show( downscaled, "at registration resolution", null, registrationCalibration, false );
 
@@ -208,7 +276,7 @@ public class SpindleMorphometry
 
 		Utils.log( "Computing long axis orientation..." );
 
-		final AffineTransform3D orientationTransform = computeOrientationTransform( yawAlignedMask, yawAlignedIntensities, settings.registrationResolution );
+		final AffineTransform3D orientationTransform = computeOrientationTransform( yawAlignedMask, yawAlignedIntensities, settings.workingVoxelSize );
 
 		registration = registration.preConcatenate( orientationTransform );
 
@@ -221,7 +289,7 @@ public class SpindleMorphometry
 
 		final RandomAccessibleInterval yawAndOrientationAlignedMask = Utils.copyAsArrayImg( Transforms.createTransformedView( centralObjectMask, registration, new NearestNeighborInterpolatorFactory() ) );
 
-		final CentroidsParameters centroidsParameters = Utils.computeCentroidsParametersAlongXAxis( yawAndOrientationAlignedMask, settings.registrationResolution, settings.rollAngleMaxDistanceToCenter );
+		final CentroidsParameters centroidsParameters = Utils.computeCentroidsParametersAlongXAxis( yawAndOrientationAlignedMask, settings.workingVoxelSize, settings.rollAngleMaxDistanceToCenter );
 
 		if ( settings.showIntermediateResults )
 			Plots.plot( centroidsParameters.axisCoordinates, centroidsParameters.angles, "x", "angle" );
@@ -261,7 +329,7 @@ public class SpindleMorphometry
 		if ( settings.closingRadius > 0 )
 		{
 			Utils.log( "Morphological closing...");
-			Shape closingShape = new HyperSphereShape( ( int ) ( settings.closingRadius / settings.registrationResolution ) );
+			Shape closingShape = new HyperSphereShape( ( int ) ( settings.closingRadius / settings.workingVoxelSize ) );
 			Closing.close( Views.extendBorder( mask ), Views.iterable( closed ), closingShape, 1 );
 		}
 
@@ -305,8 +373,8 @@ public class SpindleMorphometry
 	{
 		Utils.log( "Seeds for watershed...");
 
-		double globalDistanceThreshold = Math.pow( settings.watershedSeedsGlobalDistanceThreshold / settings.registrationResolution, 2 );
-		double localMaximaDistanceThreshold = Math.pow( settings.watershedSeedsLocalMaximaDistanceThreshold / settings.registrationResolution, 2 );
+		double globalDistanceThreshold = Math.pow( settings.watershedSeedsGlobalDistanceThreshold / settings.workingVoxelSize, 2 );
+		double localMaximaDistanceThreshold = Math.pow( settings.watershedSeedsLocalMaximaDistanceThreshold / settings.workingVoxelSize, 2 );
 
 		final RandomAccessibleInterval< BitType >  seeds = Utils.createSeeds(
 				distance,
@@ -394,7 +462,7 @@ public class SpindleMorphometry
 	private AffineTransform3D createFinalTransform( double[] inputCalibration, AffineTransform3D registration, double[] registrationCalibration )
 	{
 		final AffineTransform3D transform =
-				Transforms.getScalingTransform( inputCalibration, settings.registrationResolution )
+				Transforms.getScalingTransform( inputCalibration, settings.workingVoxelSize )
 				.preConcatenate( registration )
 				.preConcatenate( Transforms.getScalingTransform( registrationCalibration, settings.outputResolution ) );
 
@@ -452,7 +520,7 @@ public class SpindleMorphometry
 	private double[] getRegistrationCalibration()
 	{
 		double[] registrationCalibration = new double[ 3 ];
-		Arrays.fill( registrationCalibration, settings.registrationResolution );
+		Arrays.fill( registrationCalibration, settings.workingVoxelSize );
 		return registrationCalibration;
 	}
 

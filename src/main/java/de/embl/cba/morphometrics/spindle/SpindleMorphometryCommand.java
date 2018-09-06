@@ -76,7 +76,7 @@ public class SpindleMorphometryCommand<T extends RealType<T> & NativeType< T > >
 	public boolean showIntermediateResults = settings.showIntermediateResults;
 
 	@Parameter
-	public double registrationResolution = settings.registrationResolution;
+	public double registrationResolution = settings.workingVoxelSize;
 
 	@Parameter
 	public double outputResolution = settings.outputResolution;
@@ -279,7 +279,7 @@ public class SpindleMorphometryCommand<T extends RealType<T> & NativeType< T > >
 	public void setSettingsFromUI()
 	{
 		settings.showIntermediateResults = showIntermediateResults;
-		settings.registrationResolution = registrationResolution;
+		settings.workingVoxelSize = registrationResolution;
 		settings.closingRadius = 0;
 		settings.outputResolution = outputResolution;
 		settings.backgroundIntensity = 0;

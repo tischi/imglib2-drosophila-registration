@@ -1,7 +1,6 @@
 package de.embl.cba.morphometrics.spindle;
 
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.img.Img;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 
@@ -20,7 +19,7 @@ public class SpindleMorphometrySettings <T extends RealType<T> & NativeType< T >
 	public int shavenBabyChannelIndexOneBased = 1;
 	public boolean showIntermediateResults = false;
 	public double refractiveIndexScalingCorrectionFactor = 1.6;
-	public double registrationResolution = 6.0;
+	public double workingVoxelSize = 6.0;
 	public double outputResolution = 2.0;
 	public double backgroundIntensity = 3155; // TODO: determine from image (maybe min value after averaging)
 	public double refractiveIndexIntensityCorrectionDecayLength = 170;
@@ -30,11 +29,11 @@ public class SpindleMorphometrySettings <T extends RealType<T> & NativeType< T >
 	public double rollAngleMaxDistanceToCenter = drosophilaLength / 2.0 - 10.0;
 
 	public double watershedSeedsGlobalDistanceThreshold = drosophilaWidth / 3.0;
-	public double watershedSeedsLocalMaximaDistanceThreshold = 3 * registrationResolution; // at least 3 pixels
+	public double watershedSeedsLocalMaximaDistanceThreshold = 3 * workingVoxelSize; // at least 3 pixels
 
 	public String thresholdModality = MANUAL_THRESHOLD;
 	public double thresholdInUnitsOfBackgroundPeakHalfWidth = 5.0;
-	public double closingRadius = 0;
+	public double closingRadius = 1.0;
 
 	public double outputImageSizeX = 500;
 	public double outputImageSizeY = 250;
@@ -45,4 +44,5 @@ public class SpindleMorphometrySettings <T extends RealType<T> & NativeType< T >
 	public RandomAccessibleInterval<T> dapi;
 	public RandomAccessibleInterval<T> tubulin;
 
+	public double maxValue;
 }
