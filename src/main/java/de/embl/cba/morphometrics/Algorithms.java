@@ -4,22 +4,32 @@ import net.imglib2.*;
 import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.algorithm.neighborhood.Neighborhood;
 import net.imglib2.algorithm.neighborhood.Shape;
+import net.imglib2.img.Img;
 import net.imglib2.img.ImgFactory;
 import net.imglib2.img.array.ArrayImgFactory;
+import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
-import net.imglib2.interpolation.randomaccess.NearestNeighborInterpolatorFactory;
 import net.imglib2.loops.LoopBuilder;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.realtransform.Scale;
+import net.imglib2.roi.labeling.ImgLabeling;
+import net.imglib2.roi.labeling.LabelRegion;
+import net.imglib2.roi.labeling.LabelRegions;
+import net.imglib2.roi.labeling.LabelingType;
 import net.imglib2.type.NativeType;
+import net.imglib2.type.logic.BitType;
 import net.imglib2.type.numeric.RealType;
+import net.imglib2.type.numeric.integer.IntType;
+import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.Views;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import static de.embl.cba.morphometrics.Constants.XYZ;
 import static de.embl.cba.morphometrics.Transforms.createTransformedInterval;
+import static java.lang.Math.abs;
 
 public class Algorithms
 {
@@ -109,7 +119,7 @@ public class Algorithms
 
 
 	public static < T extends RealType< T > & NativeType< T > >
-	double findMaximumValue( RandomAccessibleInterval< T > rai )
+	double getMaximumValue( RandomAccessibleInterval< T > rai )
 	{
 		Cursor< T > cursor = Views.iterable( rai ).localizingCursor();
 
@@ -164,5 +174,88 @@ public class Algorithms
 	}
 
 
+	public static int getCentralLabelIndex( ImgLabeling< Integer, IntType > labeling )
+	{
+		final RandomAccess< LabelingType< Integer > > labelingRandomAccess = labeling.randomAccess();
+		for ( int d : XYZ ) labelingRandomAccess.setPosition( labeling.dimension( d ) / 2, d );
+		int centralIndex = labelingRandomAccess.get().getIndex().getInteger();
+		return labeling.getMapping().labelsAtIndex( centralIndex ).iterator().next();
+	}
 
+	public static LabelRegion< Integer > getCentralObjectLabelRegion( ImgLabeling< Integer, IntType > labeling )
+	{
+		int centralLabel = getCentralLabelIndex( labeling );
+
+		final LabelRegions< Integer > labelRegions = new LabelRegions<>( labeling );
+
+		return labelRegions.getLabelRegion( centralLabel );
+	}
+
+	public static LabelRegion< Integer > getLargestObject( ImgLabeling< Integer, IntType > labeling )
+	{
+		final LabelRegions< Integer > labelRegions = new LabelRegions<>( labeling );
+
+		long maxSize = Long.MIN_VALUE;
+		LabelRegion largestRegion = null;
+
+		for ( LabelRegion labelRegion : labelRegions )
+		{
+			if ( labelRegion.size() > maxSize)
+			{
+				largestRegion = labelRegion;
+				maxSize = labelRegion.size();
+			}
+		}
+
+		return largestRegion;
+	}
+
+	public static Img< UnsignedByteType > createUnsignedByteTypeMaskFromLabelRegion( LabelRegion< Integer > centralObjectRegion, long[] dimensions )
+	{
+		final Img< UnsignedByteType > centralObjectImg = ArrayImgs.unsignedBytes( dimensions );
+
+		final Cursor< Void > regionCursor = centralObjectRegion.cursor();
+		final RandomAccess< UnsignedByteType > access = centralObjectImg.randomAccess();
+		while ( regionCursor.hasNext() )
+		{
+			regionCursor.fwd();
+			access.setPosition( regionCursor );
+			access.get().set( 255 );
+		}
+		return centralObjectImg;
+	}
+
+	public static Img< BitType > createBitTypeMaskFromLabelRegion( LabelRegion< Integer > centralObjectRegion, long[] dimensions )
+	{
+		final Img< BitType > centralObjectImg = ArrayImgs.bits( dimensions );
+
+		final Cursor< Void > regionCursor = centralObjectRegion.cursor();
+		final RandomAccess< BitType > access = centralObjectImg.randomAccess();
+		while ( regionCursor.hasNext() )
+		{
+			regionCursor.fwd();
+			access.setPosition( regionCursor );
+			access.get().set( true );
+		}
+		return centralObjectImg;
+	}
+
+	public static ArrayList< RealPoint > origin()
+	{
+		final ArrayList< RealPoint > origin = new ArrayList<>();
+		origin.add( new RealPoint( new double[]{ 0, 0, 0 } ) );
+		return origin;
+	}
+
+	public static ArrayList< Double > computeAbsoluteDerivatives( ArrayList< Double > values, int di )
+	{
+		final ArrayList< Double > derivatives = new ArrayList<>();
+
+		for ( int i = di / 2 + 1; i < values.size() - di / 2 - 1; ++i )
+		{
+			derivatives.add( abs( values.get( i + di / 2 ) - values.get( i - di / 2 ) ) );
+		}
+
+		return derivatives;
+	}
 }

@@ -22,7 +22,6 @@ import net.imglib2.loops.LoopBuilder;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.roi.labeling.ImgLabeling;
 import net.imglib2.roi.labeling.LabelingType;
-import net.imglib2.type.BooleanType;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.logic.BitType;
 import net.imglib2.type.numeric.IntegerType;
@@ -55,6 +54,38 @@ public class Utils
 	public static void log( String message, LogService logService )
 	{
 		logService.info( message );
+	}
+
+	public static < T extends RealType< T > & NativeType< T > >
+	CoordinatesAndValues computeAverageIntensitiesAlongAxis(
+			RandomAccessibleInterval< T > rai, double maxAxisDist, int axis, double calibration )
+	{
+		final CoordinatesAndValues coordinatesAndValues = new CoordinatesAndValues();
+
+		for ( long coordinate = rai.min( axis ); coordinate <= rai.max( axis ); ++coordinate )
+		{
+			final IntervalView< T > intensitySlice = Views.hyperSlice( rai, axis, coordinate );
+			coordinatesAndValues.coordinates.add( (double) coordinate * calibration );
+			coordinatesAndValues.values.add( computeAverage( intensitySlice, maxAxisDist ) );
+		}
+
+		return coordinatesAndValues;
+	}
+
+	public static < T extends RealType< T > & NativeType< T > >
+	CoordinatesAndValues computeMaximumIntensitiesAlongAxis(
+			RandomAccessibleInterval< T > rai, double maxAxisDist, int axis, double calibration )
+	{
+		final CoordinatesAndValues coordinatesAndValues = new CoordinatesAndValues();
+
+		for ( long coordinate = rai.min( axis ); coordinate <= rai.max( axis ); ++coordinate )
+		{
+			final IntervalView< T > intensitySlice = Views.hyperSlice( rai, axis, coordinate );
+			coordinatesAndValues.coordinates.add( (double) coordinate * calibration );
+			coordinatesAndValues.values.add( computeMaximum( intensitySlice, maxAxisDist ) );
+		}
+
+		return coordinatesAndValues;
 	}
 
 	public static < T extends RealType< T > & NativeType< T > >
@@ -103,14 +134,14 @@ public class Utils
 
 	public static < T extends RealType< T > & NativeType< T > >
 	CoordinatesAndValues computeAverageIntensitiesAlongAxis(
-			RandomAccessibleInterval< T > rai, RandomAccessibleInterval< BooleanType > mask, int axis, double calibration )
+			RandomAccessibleInterval< T > rai, RandomAccessibleInterval< BitType > mask, int axis, double calibration )
 	{
 		final CoordinatesAndValues coordinatesAndValues = new CoordinatesAndValues();
 
 		for ( long coordinate = rai.min( axis ); coordinate <= rai.max( axis ); ++coordinate )
 		{
 			final IntervalView< T > intensitySlice = Views.hyperSlice( rai, axis, coordinate );
-			final IntervalView< BooleanType > maskSlice = Views.hyperSlice( mask, axis, coordinate );
+			final IntervalView< BitType > maskSlice = Views.hyperSlice( mask, axis, coordinate );
 
 			coordinatesAndValues.coordinates.add( (double) coordinate * calibration );
 			coordinatesAndValues.values.add( computeAverage( intensitySlice, maskSlice ) );
@@ -119,8 +150,10 @@ public class Utils
 		return coordinatesAndValues;
 	}
 
+
+
 	public static CentroidsParameters computeCentroidsParametersAlongXAxis(
-			RandomAccessibleInterval< BooleanType > rai,
+			RandomAccessibleInterval< BitType > rai,
 			double calibration,
 			double maxDistanceToCenter )
 	{
@@ -169,16 +202,16 @@ public class Utils
 
 	public static double vectorLength( double[] vector )
 	{
-		double centroidNorm = 0;
+		double norm = 0;
 
 		for ( int d = 0; d < vector.length; ++d )
 		{
-			centroidNorm += vector[ d ] * vector[ d ];
+			norm += vector[ d ] * vector[ d ];
 		}
 
-		centroidNorm = Math.sqrt( centroidNorm );
+		norm = Math.sqrt( norm );
 
-		return centroidNorm;
+		return norm;
 	}
 
 	public static double dotProduct( double[] vector01, double[] vector02  )
@@ -206,9 +239,9 @@ public class Utils
 	}
 
 
-	private static double[] computeCentroidPerpendicularToAxis( RandomAccessibleInterval< BooleanType > rai, int axis, long coordinate )
+	private static double[] computeCentroidPerpendicularToAxis( RandomAccessibleInterval< BitType > rai, int axis, long coordinate )
 	{
-		final IntervalView< BooleanType > slice = Views.hyperSlice( rai, axis, coordinate );
+		final IntervalView< BitType > slice = Views.hyperSlice( rai, axis, coordinate );
 
 		int numHyperSliceDimensions = rai.numDimensions() - 1;
 
@@ -216,7 +249,7 @@ public class Utils
 
 		int numPoints = 0;
 
-		final Cursor< BooleanType > cursor = slice.cursor();
+		final Cursor< BitType > cursor = slice.cursor();
 
 		while( cursor.hasNext() )
 		{
@@ -244,9 +277,9 @@ public class Utils
 		}
 	}
 
-	private static long computeNumberOfVoxelsPerpendicularToAxis( RandomAccessibleInterval< BooleanType > rai, int axis, long coordinate )
+	private static long computeNumberOfVoxelsPerpendicularToAxis( RandomAccessibleInterval< BitType > rai, int axis, long coordinate )
 	{
-		final IntervalView< BooleanType > slice = Views.hyperSlice( rai, axis, coordinate );
+		final IntervalView< BitType > slice = Views.hyperSlice( rai, axis, coordinate );
 
 		int numHyperSliceDimensions = rai.numDimensions() - 1;
 
@@ -254,7 +287,7 @@ public class Utils
 
 		int numPoints = 0;
 
-		final Cursor< BooleanType > cursor = slice.cursor();
+		final Cursor< BitType > cursor = slice.cursor();
 
 		while ( cursor.hasNext() )
 		{
@@ -340,7 +373,7 @@ public class Utils
 
 		final CoordinatesAndValues coordinatesAndValues = computeAverageIntensitiesAlongAxis( rai, longAxisDimension, calibration );
 
-		ArrayList< Double > absoluteDerivatives = computeAbsoluteDerivatives( coordinatesAndValues.values, (int) (derivativeDelta / calibration ));
+		ArrayList< Double > absoluteDerivatives = Algorithms.computeAbsoluteDerivatives( coordinatesAndValues.values, (int) (derivativeDelta / calibration ));
 
 		double maxLoc = computeMaxLoc( coordinatesAndValues.coordinates, absoluteDerivatives );
 
@@ -366,25 +399,19 @@ public class Utils
 
 	}
 
-	public static ArrayList< Double > computeAbsoluteDerivatives( ArrayList< Double > values, int di )
-	{
-		final ArrayList< Double > derivatives = new ArrayList<>();
-
-		for ( int i = di / 2 + 1; i < values.size() - di / 2 - 1; ++i )
-		{
-			derivatives.add( abs( values.get( i + di / 2 ) - values.get( i - di / 2 ) ) );
-		}
-
-		return derivatives;
-	}
-
-	public static double computeMaxLoc( ArrayList< Double > coordinates, ArrayList< Double > values )
+	public static double computeMaxLoc( ArrayList< Double > coordinates, ArrayList< Double > values, double[] coordinateRangeMinMax )
 	{
 		double max = Double.MIN_VALUE;
 		double maxLoc = coordinates.get( 0 );
 
 		for ( int i = 0; i < values.size(); ++i )
 		{
+			if ( coordinateRangeMinMax != null )
+			{
+				if ( coordinates.get( i ) < coordinateRangeMinMax[ 0 ] ) continue;
+				if ( coordinates.get( i ) > coordinateRangeMinMax[ 1 ] ) continue;
+			}
+
 			if ( values.get( i ) > max )
 			{
 				max = values.get( i );
@@ -443,13 +470,60 @@ public class Utils
 		return average;
 	}
 
+	public static < T extends RealType< T > & NativeType< T > >
+	double computeAverage( final RandomAccessibleInterval< T > rai, double maxAxisDist )
+	{
+		final Cursor< T > cursor = Views.iterable( rai ).cursor();
 
+		double average = 0;
+		long n = 0;
+		double[] position = new double[ rai.numDimensions() ];
+
+		while ( cursor.hasNext() )
+		{
+			cursor.fwd();
+			cursor.localize( position );
+			if ( Utils.vectorLength( position ) <= maxAxisDist)
+			{
+				average += cursor.get().getRealDouble();
+				++n;
+			}
+		}
+
+		average /= n;
+
+		return average;
+	}
+
+	public static < T extends RealType< T > & NativeType< T > >
+	double computeMaximum( final RandomAccessibleInterval< T > rai, double maxAxisDist )
+	{
+		final Cursor< T > cursor = Views.iterable( rai ).cursor();
+
+		double max = - Double.MAX_VALUE;
+		double[] position = new double[ rai.numDimensions() ];
+
+		while ( cursor.hasNext() )
+		{
+			cursor.fwd();
+			cursor.localize( position );
+			if ( Utils.vectorLength( position ) <= maxAxisDist)
+			{
+				if( cursor.get().getRealDouble() > max )
+				{
+					max = cursor.get().getRealDouble();
+				}
+			}
+		}
+
+		return max;
+	}
 
 
 	public static < T extends RealType< T > & NativeType< T > >
-	double computeAverage( final RandomAccessibleInterval< T > rai, final RandomAccessibleInterval< BooleanType > mask )
+	double computeAverage( final RandomAccessibleInterval< T > rai, final RandomAccessibleInterval< BitType > mask )
 	{
-		final Cursor< BooleanType > cursor = Views.iterable( mask ).cursor();
+		final Cursor< BitType > cursor = Views.iterable( mask ).cursor();
 		final RandomAccess< T > randomAccess = rai.randomAccess();
 
 		randomAccess.setPosition( cursor );
@@ -655,7 +729,7 @@ public class Utils
 	public static < T extends RealType< T > & NativeType< T > >
 	RandomAccessibleInterval< T > invertedView( RandomAccessibleInterval< T > input )
 	{
-		final double maximum = Algorithms.findMaximumValue( input );
+		final double maximum = Algorithms.getMaximumValue( input );
 
 		final RandomAccessibleInterval< T > inverted = Converters.convert( input, ( i, o ) -> {
 			o.setReal( ( int ) ( maximum - i.getRealDouble() ) );

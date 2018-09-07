@@ -6,28 +6,22 @@ import de.embl.cba.morphometrics.geometry.CoordinatesAndValues;
 import de.embl.cba.morphometrics.geometry.EllipsoidParameters;
 import de.embl.cba.morphometrics.geometry.Ellipsoids;
 import net.imagej.ops.OpService;
-import net.imglib2.Cursor;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealPoint;
 import net.imglib2.algorithm.morphology.Closing;
-import net.imglib2.algorithm.morphology.distance.DistanceTransform;
 import net.imglib2.algorithm.neighborhood.HyperSphereShape;
 import net.imglib2.algorithm.neighborhood.Shape;
 import net.imglib2.converter.Converters;
 import net.imglib2.histogram.Histogram1d;
 import net.imglib2.img.Img;
-import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.interpolation.randomaccess.NearestNeighborInterpolatorFactory;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.roi.labeling.ImgLabeling;
 import net.imglib2.roi.labeling.LabelRegion;
-import net.imglib2.roi.labeling.LabelRegions;
-import net.imglib2.roi.labeling.LabelingType;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.logic.BitType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.IntType;
-import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.Views;
@@ -67,26 +61,22 @@ public class SpindleMorphometry  < T extends RealType< T > & NativeType< T > >
 		final double[] workingCalibration = Utils.get3dDoubleArray( settings.workingVoxelSize );
 
 		final RandomAccessibleInterval< T > dapi = Algorithms.createIsotropicArrayImg( settings.dapi, getScalingFactors( settings.inputCalibration, settings.workingVoxelSize ) );
+		final RandomAccessibleInterval< T > tubulin = Algorithms.createIsotropicArrayImg( settings.tubulin, getScalingFactors( settings.inputCalibration, settings.workingVoxelSize ) );
 
-		if ( settings.showIntermediateResults ) show( dapi, "with isotropic resolution", null, workingCalibration, false );
+		if ( settings.showIntermediateResults ) show( dapi, "dapi isotropic resolution", null, workingCalibration, false );
+		if ( settings.showIntermediateResults ) show( tubulin, "tubulin isotropic resolution", null, workingCalibration, false );
 
 
 		/**
 		 *  Compute offset and threshold
 		 */
 
-		Utils.log( "Computing offset and threshold..." );
+		final RandomAccessibleInterval< T > dapi3um = Algorithms.createIsotropicArrayImg( settings.dapi, getScalingFactors( settings.inputCalibration, 3.0 ) );
+		final double maximumValue = Algorithms.getMaximumValue( dapi3um );
+		double threshold = maximumValue / 2.0;
 
-		final IntensityHistogram intensityHistogram = new IntensityHistogram( dapi, settings.maxValue, 2.0 );
+		Utils.log( "Dapi threshold: " + threshold );
 
-		PositionAndValue mode = intensityHistogram.getMode();
-
-		final PositionAndValue rightHandHalfMaximum = intensityHistogram.getRightHandHalfMaximum();
-
-		double threshold = ( rightHandHalfMaximum.position - mode.position ) * settings.thresholdInUnitsOfBackgroundPeakHalfWidth;
-
-		Utils.log( "Offset: " + mode.position );
-		Utils.log( "Threshold: " + ( threshold + mode.position ) );
 
 		/**
 		 * Create mask
@@ -96,49 +86,87 @@ public class SpindleMorphometry  < T extends RealType< T > & NativeType< T > >
 
 		if ( settings.showIntermediateResults ) show( mask, "mask", null, workingCalibration, false );
 
-
 		/**
 		 * Morphological closing
 		 */
 
-		RandomAccessibleInterval< BitType > closed = createClosedImage( mask );
+//		RandomAccessibleInterval< BitType > closed = createClosedImage( mask );
+		RandomAccessibleInterval< BitType > closed =  mask ;
 
 //		if ( settings.showIntermediateResults ) show( closed, "closed", null, workingCalibration, false );
 
+
 		/**
-		 * Extract central object
+		 * Extract metaphase plate object
 		 */
 
-		Utils.log( "Extracting central object..." );
+		Utils.log( "Extracting metaphase plate object..." );
 
 		final ImgLabeling< Integer, IntType > labelImg = Utils.createLabelImg( closed );
 
-		final LabelRegion< Integer > centralObjectRegion = getCentralObjectLabelRegion( labelImg );
+		final LabelRegion< Integer > largestObject = Algorithms.getLargestObject( labelImg );
 
-		final Img< BitType > centralObjectMask = createBitTypeMaskFromLabelRegion( centralObjectRegion, Intervals.dimensionsAsLongArray( labelImg ) );
+		final Img< BitType > dapiMask = Algorithms.createBitTypeMaskFromLabelRegion( largestObject, Intervals.dimensionsAsLongArray( labelImg ) );
 
-		if ( settings.showIntermediateResults ) show( centralObjectMask, "central object", null, workingCalibration, false );
+		if ( settings.showIntermediateResults ) show( dapiMask, "meta-phase object", null, workingCalibration, false );
+
+		/**
+		 * Compute ellipsoid alignment
+		 */
+
+		// TODO: maybe fit intensities rather than mask, but how to mask the intensities of the this cell
+
+		Utils.log( "Determining metaphase plate axes..." );
+
+		final EllipsoidParameters ellipsoidParameters = Ellipsoids.computeParametersFromBinaryImage( dapiMask );
+
+		Utils.log( "Creating aligned images..." );
+
+		final AffineTransform3D alignmentTransform = Ellipsoids.createAlignmentTransform( ellipsoidParameters );
+		final RandomAccessibleInterval aligendTubulin = Utils.copyAsArrayImg( Transforms.createTransformedView( tubulin, alignmentTransform, new NearestNeighborInterpolatorFactory() ) );
+		final RandomAccessibleInterval alignedDapi = Utils.copyAsArrayImg( Transforms.createTransformedView( dapi, alignmentTransform ) );
+
+		if ( settings.showIntermediateResults ) show( alignedDapi, "aligned dapi", null, workingCalibration, false );
 
 
 		/**
-		 * Compute ellipsoid (probably mainly yaw) alignment
+		 * Compute widths
 		 */
 
-		Utils.log( "Fitting ellipsoid..." );
+		Utils.log( "Determining widths..." );
 
-		final EllipsoidParameters ellipsoidParameters = Ellipsoids.computeParametersFromBinaryImage( centralObjectMask );
+		final CoordinatesAndValues dapiProfile = Utils.computeAverageIntensitiesAlongAxis( alignedDapi, settings.maxShortAxisDist, 2, settings.workingVoxelSize );
+		Plots.plot( dapiProfile.coordinates, dapiProfile.values, "distance to center", "dapi intensity" );
 
-		final AffineTransform3D alignmentTransform = Ellipsoids.createAlignmentTransform( ellipsoidParameters );
+		final CoordinatesAndValues tubulinProfile = Utils.computeMaximumIntensitiesAlongAxis( aligendTubulin, settings.maxShortAxisDist, 2, settings.workingVoxelSize );
+		Plots.plot( tubulinProfile.coordinates, tubulinProfile.values, "distance to center", "tubulin intensity" );
 
-		final RandomAccessibleInterval alignedDapiMask = Utils.copyAsArrayImg( Transforms.createTransformedView( centralObjectMask, alignmentTransform, new NearestNeighborInterpolatorFactory() ) );
+		final ArrayList< Double > tubulinProfileAbsoluteDerivative = Algorithms.computeAbsoluteDerivatives( tubulinProfile.values, ( int ) ( 1.0 / settings.workingVoxelSize ) );
+		Plots.plot( tubulinProfile.coordinates, tubulinProfileAbsoluteDerivative, "distance to center", "tubulin intensity absolute derivative" );
 
-		final RandomAccessibleInterval alignedDapiIntensities = Utils.copyAsArrayImg( Transforms.createTransformedView( dapi, alignmentTransform ) );
+		double[] maxLocs = getLeftAndRightMaxLocs( tubulinProfile, tubulinProfileAbsoluteDerivative );
 
-		if ( settings.showIntermediateResults ) show( alignedDapiIntensities, "aligned", null, workingCalibration, false );
+		final ArrayList< RealPoint > realPoints = Algorithms.origin();
+		realPoints.add( new RealPoint( new double[]{ 0.0, 0.0, maxLocs[ 0 ] } ));
+		realPoints.add( new RealPoint( new double[]{ 0.0, 0.0, maxLocs[ 1 ] } ));
 
-		
+		if ( settings.showIntermediateResults ) show( aligendTubulin, "aligned tubulin", realPoints, workingCalibration, false );
 
+	}
 
+	public static double[] getLeftAndRightMaxLocs( CoordinatesAndValues tubulinProfile, ArrayList< Double > tubulinProfileAbsoluteDerivative )
+	{
+		double[] rangeMinMax = new double[ 2 ];
+		double[] maxLocs = new double[ 2 ];
+
+		rangeMinMax[ 0 ] = 0;
+		rangeMinMax[ 1 ] = Double.MAX_VALUE;
+		maxLocs[ 0 ] = Utils.computeMaxLoc( tubulinProfile.coordinates, tubulinProfileAbsoluteDerivative, rangeMinMax );
+
+		rangeMinMax[ 0 ] = - Double.MAX_VALUE;
+		rangeMinMax[ 1 ] = 0;
+		maxLocs[ 1 ] = Utils.computeMaxLoc( tubulinProfile.coordinates, tubulinProfileAbsoluteDerivative, rangeMinMax );
+		return maxLocs;
 	}
 
 	public RandomAccessibleInterval< BitType > createClosedImage( RandomAccessibleInterval< BitType > mask )
@@ -188,7 +216,9 @@ public class SpindleMorphometry  < T extends RealType< T > & NativeType< T > >
 		return threshold;
 	}
 
-	public ImgLabeling< Integer, IntType > createWatershedSeeds( double[] registrationCalibration, RandomAccessibleInterval< DoubleType > distance, RandomAccessibleInterval< BitType > mask )
+	public ImgLabeling< Integer, IntType > createWatershedSeeds( double[] registrationCalibration,
+																 RandomAccessibleInterval< DoubleType > distance,
+																 RandomAccessibleInterval< BitType > mask )
 	{
 		Utils.log( "Seeds for watershed...");
 
@@ -213,7 +243,7 @@ public class SpindleMorphometry  < T extends RealType< T > & NativeType< T > >
 
 		if ( settings.showIntermediateResults ) Plots.plot( coordinatesAndValues.coordinates, coordinatesAndValues.values, "x", "average intensity" );
 
-		double maxLoc = Utils.computeMaxLoc( coordinatesAndValues.coordinates, coordinatesAndValues.values );
+		double maxLoc = Utils.computeMaxLoc( coordinatesAndValues.coordinates, coordinatesAndValues.values, null );
 
 		AffineTransform3D affineTransform3D = new AffineTransform3D();
 
@@ -271,13 +301,6 @@ public class SpindleMorphometry  < T extends RealType< T > & NativeType< T > >
 		return medianAngle;
 	}
 
-	public static ArrayList< RealPoint > origin()
-	{
-		final ArrayList< RealPoint > origin = new ArrayList<>();
-		origin.add( new RealPoint( new double[]{ 0, 0, 0 } ) );
-		return origin;
-	}
-
 	private AffineTransform3D createFinalTransform( double[] inputCalibration, AffineTransform3D registration, double[] registrationCalibration )
 	{
 		final AffineTransform3D transform =
@@ -288,53 +311,6 @@ public class SpindleMorphometry  < T extends RealType< T > & NativeType< T > >
 		return transform;
 	}
 
-	private Img< BitType > createBitTypeMaskFromLabelRegion( LabelRegion< Integer > centralObjectRegion, long[] dimensions )
-	{
-		final Img< BitType > centralObjectImg = ArrayImgs.bits( dimensions );
-
-		final Cursor< Void > regionCursor = centralObjectRegion.cursor();
-		final net.imglib2.RandomAccess< BitType > access = centralObjectImg.randomAccess();
-		while ( regionCursor.hasNext() )
-		{
-			regionCursor.fwd();
-			access.setPosition( regionCursor );
-			access.get().set( true );
-		}
-		return centralObjectImg;
-	}
-
-	private Img< UnsignedByteType > createUnsignedByteTypeMaskFromLabelRegion( LabelRegion< Integer > centralObjectRegion, long[] dimensions )
-	{
-		final Img< UnsignedByteType > centralObjectImg = ArrayImgs.unsignedBytes( dimensions );
-
-		final Cursor< Void > regionCursor = centralObjectRegion.cursor();
-		final net.imglib2.RandomAccess< UnsignedByteType > access = centralObjectImg.randomAccess();
-		while ( regionCursor.hasNext() )
-		{
-			regionCursor.fwd();
-			access.setPosition( regionCursor );
-			access.get().set( 255 );
-		}
-		return centralObjectImg;
-	}
-
-
-	private LabelRegion< Integer > getCentralObjectLabelRegion( ImgLabeling< Integer, IntType > labeling )
-	{
-		int centralLabel = getCentralLabel( labeling );
-
-		final LabelRegions< Integer > labelRegions = new LabelRegions<>( labeling );
-
-		return labelRegions.getLabelRegion( centralLabel );
-	}
-
-	private static int getCentralLabel( ImgLabeling< Integer, IntType > labeling )
-	{
-		final net.imglib2.RandomAccess< LabelingType< Integer > > labelingRandomAccess = labeling.randomAccess();
-		for ( int d : XYZ ) labelingRandomAccess.setPosition( labeling.dimension( d ) / 2, d );
-		int centralIndex = labelingRandomAccess.get().getIndex().getInteger();
-		return labeling.getMapping().labelsAtIndex( centralIndex ).iterator().next();
-	}
 
 	private double[] getRegistrationCalibration()
 	{
@@ -377,7 +353,7 @@ public class SpindleMorphometry  < T extends RealType< T > & NativeType< T > >
 	 DistanceTransform.transformAllChannels( binary, distance, DistanceTransform.DISTANCE_TYPE.EUCLIDIAN );
 
 
-	 final double maxDistance = Algorithms.findMaximumValue( distance );
+	 final double maxDistance = Algorithms.getMaximumValue( distance );
 
 	 final RandomAccessibleInterval< IntType > invertedDistance = Converters.convert( distance, ( i, o ) -> {
 	 o.set( ( int ) ( maxDistance - i.get() ) );

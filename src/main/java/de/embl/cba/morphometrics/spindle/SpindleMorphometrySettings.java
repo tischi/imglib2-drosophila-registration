@@ -28,7 +28,7 @@ public class SpindleMorphometrySettings <T extends RealType<T> & NativeType< T >
 	public double rollAngleMinDistanceToCenter = drosophilaLength / 2.0 * 0.5;
 	public double rollAngleMaxDistanceToCenter = drosophilaLength / 2.0 - 10.0;
 
-	public double watershedSeedsGlobalDistanceThreshold = drosophilaWidth / 3.0;
+	public double watershedSeedsGlobalDistanceThreshold = Double.MAX_VALUE;
 	public double watershedSeedsLocalMaximaDistanceThreshold = 3 * workingVoxelSize; // at least 3 pixels
 
 	public String thresholdModality = MANUAL_THRESHOLD;
@@ -45,4 +45,5 @@ public class SpindleMorphometrySettings <T extends RealType<T> & NativeType< T >
 	public RandomAccessibleInterval<T> tubulin;
 
 	public double maxValue;
+	public double maxShortAxisDist;
 }

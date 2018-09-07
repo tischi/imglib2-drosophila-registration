@@ -483,7 +483,7 @@ public class ShavenBabyRegistration
 	 DistanceTransform.transformAllChannels( binary, distance, DistanceTransform.DISTANCE_TYPE.EUCLIDIAN );
 
 
-	 final double maxDistance = Algorithms.findMaximumValue( distance );
+	 final double maxDistance = Algorithms.getMaximumValue( distance );
 
 	 final RandomAccessibleInterval< IntType > invertedDistance = Converters.convert( distance, ( i, o ) -> {
 	 o.set( ( int ) ( maxDistance - i.get() ) );
